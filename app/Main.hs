@@ -1,5 +1,8 @@
 module Main where
 
+import UI
+import System.IO
+
 data Subject = Subject { 
     -- must have
     subjectName :: String, 
@@ -13,7 +16,8 @@ data Subject = Subject {
 
 data Lesson = Lesson {
     -- must have
-    time :: Maybe String,
+    day :: String,
+    time :: String,
 
     -- optional
     room :: String,
@@ -40,4 +44,17 @@ data Palette = Palette {
     } deriving (Show)
 
 main :: IO ()
-main = putStrLn "Hello, world!"
+main = do
+    printMenu
+
+    putStr "Select option (1-5): "
+    hFlush stdout
+    choice <- getLine
+    case choice of
+        "1" -> putStrLn "createTimetable"
+        "2" -> putStrLn "editTimetable"
+        "3" -> putStrLn "importTimetable"
+        "4" -> putStrLn "exportTimetable"
+        "5" -> putStrLn "Goodbye!"
+        _   -> printError "\nInvalid choice!\n\n" >> main
+    
