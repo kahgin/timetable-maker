@@ -67,7 +67,9 @@ executable a-kahgin
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1
+    build-depends:    base ^>=4.17.2.1,
+                      vty,
+                      time >= 1.9 && < 1.12,
 
     -- Directories containing source files.
     hs-source-dirs:   app
