@@ -41,3 +41,9 @@ printExample message = do
     setSGR [SetColor Foreground Dull Cyan]
     putStrLn message
     setSGR [Reset]
+
+printExit :: IO ()
+printExit = do
+    setSGR [SetColor Foreground Dull Blue]
+    putStrLn "Press [Enter] to exit.\n"
+    setSGR [Reset]

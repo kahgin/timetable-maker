@@ -2,25 +2,30 @@ module Main where
 
 import UI
 import Helper
+import File
 import System.IO
+import Data.Time
+import Data.Aeson
+import GHC.Generics
 
 data Timetable = Timetable {
     timetableName :: String,
     subjects :: [Subject]
-    } deriving (Show)
+    } deriving (Show, Generic, ToJSON, FromJSON)
+
+instance FromJSON Timetable
+instance ToJSON Timetable
 
 data Subject = Subject { 
     subjectName :: String,
-    color :: String,
-    description :: Maybe String,
     lessons :: [Lesson]
     } deriving (Show)
 
 data Lesson = Lesson {
-    day :: String,
+    day :: DayOfWeek,
     time :: TimeRange,
     room :: String,
-    teacher :: String
+    lecturer :: String
     } deriving (Show)
 
 createTimetable :: IO Timetable
@@ -41,18 +46,23 @@ manageTimetable timetable = do
     printHeader (timetableName timetable)
     putStrLn "1. Add a subject"
     putStrLn "2. Edit a subject"
-    putStrLn "3. Display all subjects"
-    putStrLn "4. Finish"
+    putStrLn "3. Delete a subject"
+    printExit
 
-    putStr "Select option (1-4): "
+    putStr "Select option (1-3): "
     hFlush stdout
     choice <- getLine
     case choice of
         "1" -> createSubject                        >> manageTimetable timetable
         "2" -> putStrLn "editSubject"               >> manageTimetable timetable
-        "3" -> putStrLn "displaySubjects"           >> manageTimetable timetable
-        "4" -> return timetable
+        "3" -> putStrLn "deleteSubject"             >> manageTimetable timetable
+        ""  -> return timetable
         _   -> printError "\nInvalid choice!\n\n"   >> manageTimetable timetable
+
+editTimetable :: IO ()
+editTimetable = do
+    clearScreen
+    printHeader "Edit a timetable"
 
 createSubject :: IO Subject
 createSubject = do
@@ -62,7 +72,7 @@ createSubject = do
     hFlush stdout
     subjectName <- getLine
 
-    let newSubject = Subject { subjectName = subjectName, color = "", description = Nothing, lessons = [] }
+    let newSubject = Subject { subjectName = subjectName, lessons = [] }
     manageSubject newSubject
       
 manageSubject :: Subject -> IO Subject
@@ -75,9 +85,9 @@ manageSubject subject = do
     putStrLn "1. Add a lesson"
     putStrLn "2. Edit a lesson"
     putStrLn "3. Delete a lesson"
-    putStrLn "4. Finish"
+    printExit
 
-    putStr "Select option (1-4): "
+    putStr "Select option (1-3): "
     hFlush stdout
     choice <- getLine
     case choice of
@@ -87,36 +97,33 @@ manageSubject subject = do
             manageSubject updatedSubject
         "2" -> putStrLn "editLesson"                >> manageSubject subject
         "3" -> displayLessons (lessons subject)     >> manageSubject subject
-        "4" -> return subject
+        ""  -> return subject
         _   -> printError "\nInvalid choice!\n\n"   >> manageSubject subject
 
 displayLessons :: [Lesson] -> IO ()
 displayLessons lessons = do
-    let border = replicate 40 '='
+    let border = replicate 30 '='
     putStrLn border
-    mapM_ printLesson lessons
+    mapM_ printLessonWithBorder (zip lessons [1..])
     putStrLn border
-  where
-    printLesson lesson = do
-        putStrLn $ "Day: " ++ day lesson
-        putStrLn $ "Time: " ++ show (time lesson)
-        putStrLn $ "Room: " ++ room lesson
-        putStrLn $ "Teacher: " ++ teacher lesson
-        putStrLn $ replicate 40 '-'
+    where
+        printLessonWithBorder (lesson, index) = do
+            putStrLn $ "Day: " ++ show (day lesson)
+            putStrLn $ "Time: " ++ show (time lesson)
+            putStrLn $ "Room: " ++ room lesson
+            putStrLn $ "Lecturer: " ++ lecturer lesson
+            if index == length lessons then return () else putStrLn $ replicate 30 '-'
 
-{-editSubject :: IO ()
+editSubject :: IO ()
 editSubject = do
-    for i, subject in subjects do
-        putStrLn (i. <> subject.subjectName)
     putStr "Select option: "
     hFlush stdout
     choice <- getLine
     case choice of
-        "1" -> putStrLn "editSubjectName"
-        "2" -> putStrLn "editSubjectColor"
-        "3" -> putStrLn "editSubjectDescription"
-        "4" -> putStrLn "finish"
-        _   -> printError "\nInvalid choice!\n\n" >> editSubject-}
+        "1" -> putStrLn "editSubjectName"         >> editSubject
+        "2" -> putStrLn "editLesson"              >> editSubject
+        ""  -> return ()
+        _   -> printError "\nInvalid choice!\n\n" >> editSubject
 
 createLesson :: IO Lesson
 createLesson = do
@@ -131,11 +138,11 @@ createLesson = do
     hFlush stdout
     room <- getLine
 
-    putStr "Teacher (optional): "
+    putStr "Lecturer (optional): "
     hFlush stdout
-    teacher <- getLine
+    lecturer <- getLine
 
-    return Lesson { day = day, time = time, room = room, teacher = teacher }
+    return Lesson { day = day, time = time, room = room, lecturer = lecturer }
 
 mainMenu :: IO ()
 mainMenu = do
@@ -145,9 +152,9 @@ mainMenu = do
     putStrLn "2. Edit a timetable"
     putStrLn "3. Import a timetable"
     putStrLn "4. Export a timetable"
-    putStrLn "Press [Enter] to Exit\n"
+    printExit
 
-    putStr "Select option (1-5): "
+    putStr "Select option (1-4): "
     hFlush stdout
     choice <- getLine
     case choice of

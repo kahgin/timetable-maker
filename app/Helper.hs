@@ -14,37 +14,29 @@ data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay }
 instance Show TimeRange where
     show (TimeRange start end) = formatTime defaultTimeLocale "%I:%M%p" start ++ " - " ++ formatTime defaultTimeLocale "%I:%M%p" end
 
--- Day names
-dayNames :: Map String String
-dayNames = Map.fromList
-  [ ("mon", "Monday")
-  , ("monday", "Monday")
-  , ("tue", "Tuesday")
-  , ("tuesday", "Tuesday")
-  , ("wed", "Wednesday")
-  , ("wednesday", "Wednesday")
-  , ("thu", "Thursday")
-  , ("thursday", "Thursday")
-  , ("fri", "Friday")
-  , ("friday", "Friday")
-  , ("sat", "Saturday")
-  , ("saturday", "Saturday")
-  , ("sun", "Sunday")
-  , ("sunday", "Sunday")
-  ]
+dayMap :: Map.Map String DayOfWeek
+dayMap = Map.fromList
+    [ ("mon", Monday),     ("monday", Monday)
+    , ("tue", Tuesday),    ("tuesday", Tuesday)
+    , ("wed", Wednesday),  ("wednesday", Wednesday)
+    , ("thu", Thursday),   ("thursday", Thursday)
+    , ("fri", Friday),     ("friday", Friday)
+    , ("sat", Saturday),   ("saturday", Saturday)
+    , ("sun", Sunday),     ("sunday", Sunday)
+    ]
 
 -- Validate Day
-validateDay :: IO String
+validateDay :: IO DayOfWeek
 validateDay = do
     printExample "Enter day (e.g. Monday, Tue)."
     putStr "Day: "
     hFlush stdout
     input <- getLine
     let normalizedInput = map toLower input
-    case Map.lookup normalizedInput dayNames of
+    case Map.lookup normalizedInput dayMap of
         Just day -> return day
         Nothing -> do
-            printError "Invalid day."
+            printError "Invalid day.\n"
             validateDay 
 
 -- Validate Time
@@ -55,23 +47,34 @@ validateTime = do
     hFlush stdout
     timeInput <- getLine
     case parseTimeRange timeInput of
-        Just timeRange -> return timeRange
+        Just timeRange 
+            | isValidTimeOrder timeRange -> return timeRange 
+            | otherwise -> do 
+                printError "End time must be after start time.\n"
+                validateTime
         Nothing -> do
             printError "Invalid time format.\n"
             validateTime
 
--- Function to parse a time string into TimeOfDay, supporting multiple formats
+-- Helper to check if end time is after start time
+isValidTimeOrder :: TimeRange -> Bool
+isValidTimeOrder (TimeRange start end) =
+    timeToMinutes start < timeToMinutes end
+  where
+    timeToMinutes t = todHour t * 60 + todMin t
+
+-- Function to parse a time string into TimeOfDay
 parseTime :: String -> Maybe TimeOfDay
 parseTime timeString =
-    parseWithFormat "%l:%M%p" timeString `mplus`
-    parseWithFormat "%l.%M%p" timeString `mplus`
-    parseWithFormat "%l%p" timeString
+    parseWithFormat "%l:%M%p" timeString `mplus` -- 9:00am
+    parseWithFormat "%l.%M%p" timeString `mplus` -- 9.00am
+    parseWithFormat "%l%p" timeString            -- 9am
 
--- Helper function to try parsing with a given format
+-- Function to try parsing with a given format
 parseWithFormat :: String -> String -> Maybe TimeOfDay
 parseWithFormat format timeString =
     case parseTimeM True defaultTimeLocale format timeString of
-        Just t -> Just t  -- Extract the parsed TimeOfDay directly
+        Just t -> Just t
         _ -> Nothing
 
 -- Function to parse TimeRange string into TimeRange data structure

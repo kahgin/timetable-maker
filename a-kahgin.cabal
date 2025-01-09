@@ -63,6 +63,7 @@ executable a-kahgin
     -- Modules included in this executable, other than Main.
     other-modules:    UI
                     , Helper
+					, File
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -73,7 +74,8 @@ executable a-kahgin
                     , text
                     , ansi-terminal
                     , regex-tdfa
-					, containers
+                    , containers
+					, aeson
 
     -- Directories containing source files.
     hs-source-dirs:   app
