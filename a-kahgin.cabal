@@ -62,15 +62,17 @@ executable a-kahgin
 
     -- Modules included in this executable, other than Main.
     other-modules:    UI
+                    , Helper
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base ^>=4.17.2.1,
-                      time >= 1.9 && < 1.12,
-                      text,
-                      ansi-terminal,
+    build-depends:    base ^>=4.17.2.1
+                    , time >= 1.9 && < 1.12
+                    , text
+                    , ansi-terminal
+                    , regex-tdfa
 
     -- Directories containing source files.
     hs-source-dirs:   app

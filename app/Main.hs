@@ -1,40 +1,26 @@
 module Main where
 
 import UI
+import Helper
 import System.IO
 
 data Timetable = Timetable {
-    -- must have
     timetableName :: String,
-    palette :: [String],
-    start :: String,
-    end :: String,
-
-    -- optional
     subjects :: [Subject]
-
     } deriving (Show)
 
 data Subject = Subject { 
-    -- must have
-    subjectName :: String, 
+    subjectName :: String,
     color :: String,
-
-    -- optional
     description :: Maybe String,
     lessons :: [Lesson]
-
     } deriving (Show)
 
 data Lesson = Lesson {
-    -- must have
     day :: String,
-    time :: String,
-
-    -- optional
+    time :: TimeRange,
     room :: String,
     teacher :: String
-
     } deriving (Show)
 
 createTimetable :: IO Timetable
@@ -45,7 +31,7 @@ createTimetable = do
     hFlush stdout
     timetableName <- getLine
 
-    let newTimetable = Timetable { timetableName = timetableName, palette = [], start = "", end = "", subjects = [] }
+    let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
     manageTimetable newTimetable
 
 manageTimetable :: Timetable -> IO Timetable
@@ -112,7 +98,7 @@ displayLessons lessons = do
   where
     printLesson lesson = do
         putStrLn $ "Day: " ++ day lesson
-        putStrLn $ "Time: " ++ time lesson
+        putStrLn $ "Time: " ++ show (time lesson)
         putStrLn $ "Room: " ++ room lesson
         putStrLn $ "Teacher: " ++ teacher lesson
         putStrLn $ replicate 40 '-'
@@ -135,13 +121,10 @@ createLesson :: IO Lesson
 createLesson = do
     clearScreen
     printHeader "Add a lesson"
-    putStr "Day: "
-    hFlush stdout
-    day <- getLine
 
-    putStr "Time: "
-    hFlush stdout
-    time <- getLine
+    day <- validateDay
+
+    time <- validateTime
 
     putStr "Room (optional): "
     hFlush stdout
@@ -168,11 +151,11 @@ mainMenu = do
     choice <- getLine
     case choice of
         "1" -> createTimetable                      >> mainMenu
-        "2" -> putStrLn "editTimetable"
-        "3" -> putStrLn "importTimetable"
-        "4" -> putStrLn "exportTimetable"
-        "" -> putStrLn "Goodbye!"
+        "2" -> putStrLn "editTimetable"             >> mainMenu
+        "3" -> putStrLn "importTimetable"           >> mainMenu
+        "4" -> putStrLn "exportTimetable"           >> mainMenu
+        ""  -> putStrLn "Goodbye!"
         _   -> printError "\nInvalid choice!\n\n"   >> mainMenu
 
-main :: IO ()
-main = mainMenu
+main :: IO Lesson
+main = createLesson
