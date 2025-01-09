@@ -64,6 +64,7 @@ executable a-kahgin
     other-modules:    UI
                     , Helper
 					, File
+					, Timetable
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -73,9 +74,9 @@ executable a-kahgin
                     , time >= 1.9 && < 1.12
                     , text
                     , ansi-terminal
-                    , regex-tdfa
                     , containers
 					, aeson
+					, bytestring
 
     -- Directories containing source files.
     hs-source-dirs:   app
