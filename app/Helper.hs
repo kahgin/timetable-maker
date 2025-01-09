@@ -5,36 +5,52 @@ import System.IO
 import Data.Char
 import Data.Time
 import Control.Monad (mplus)
+import Data.Map (Map)
+import qualified Data.Map as Map
 
 -- Data structure for TimeRange
-data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving Show
+data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay }
+
+instance Show TimeRange where
+    show (TimeRange start end) = formatTime defaultTimeLocale "%I:%M%p" start ++ " - " ++ formatTime defaultTimeLocale "%I:%M%p" end
+
+-- Day names
+dayNames :: Map String String
+dayNames = Map.fromList
+  [ ("mon", "Monday")
+  , ("monday", "Monday")
+  , ("tue", "Tuesday")
+  , ("tuesday", "Tuesday")
+  , ("wed", "Wednesday")
+  , ("wednesday", "Wednesday")
+  , ("thu", "Thursday")
+  , ("thursday", "Thursday")
+  , ("fri", "Friday")
+  , ("friday", "Friday")
+  , ("sat", "Saturday")
+  , ("saturday", "Saturday")
+  , ("sun", "Sunday")
+  , ("sunday", "Sunday")
+  ]
 
 -- Validate Day
 validateDay :: IO String
 validateDay = do
+    printExample "Enter day (e.g. Monday, Tue)."
     putStr "Day: "
     hFlush stdout
-    dayInput <- getLine
-    let normalizedDay = map toLower dayInput
-    if isValidDay normalizedDay
-        then return normalizedDay
-        else do
-            printError "Invalid day.\n"
-            validateDay
-
--- Helper to check if the day is valid
-isValidDay :: String -> Bool
-isValidDay day = day `elem` dayNames
-
--- List of valid day names
-dayNames :: [String]
-dayNames = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday", 
-            "mon", "tue", "wed", "thu", "fri", "sat", "sun"]
+    input <- getLine
+    let normalizedInput = map toLower input
+    case Map.lookup normalizedInput dayNames of
+        Just day -> return day
+        Nothing -> do
+            printError "Invalid day."
+            validateDay 
 
 -- Validate Time
 validateTime :: IO TimeRange
 validateTime = do
-    putStrLn "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)"
+    printExample "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)."
     putStr "Time: "
     hFlush stdout
     timeInput <- getLine

@@ -35,3 +35,9 @@ printUnavailable message = do
     setSGR [SetColor Foreground Vivid Black]
     putStrLn message
     setSGR [Reset]
+
+printExample :: String -> IO ()
+printExample message = do
+    setSGR [SetColor Foreground Dull Cyan]
+    putStrLn message
+    setSGR [Reset]

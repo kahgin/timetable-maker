@@ -73,6 +73,7 @@ executable a-kahgin
                     , text
                     , ansi-terminal
                     , regex-tdfa
+					, containers
 
     -- Directories containing source files.
     hs-source-dirs:   app

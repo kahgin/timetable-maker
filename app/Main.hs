@@ -34,6 +34,7 @@ createTimetable = do
     let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
     manageTimetable newTimetable
 
+
 manageTimetable :: Timetable -> IO Timetable
 manageTimetable timetable = do
     clearScreen
@@ -151,11 +152,11 @@ mainMenu = do
     choice <- getLine
     case choice of
         "1" -> createTimetable                      >> mainMenu
-        "2" -> putStrLn "editTimetable"             >> mainMenu
+        "2" -> editTimetable                        >> mainMenu
         "3" -> putStrLn "importTimetable"           >> mainMenu
         "4" -> putStrLn "exportTimetable"           >> mainMenu
         ""  -> putStrLn "Goodbye!"
         _   -> printError "\nInvalid choice!\n\n"   >> mainMenu
 
-main :: IO Lesson
-main = createLesson
+main :: IO ()
+main = mainMenu
