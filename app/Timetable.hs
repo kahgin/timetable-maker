@@ -72,7 +72,7 @@ manageTimetable timetable = do
                 putStrLn "No subjects available."
                 manageTimetable timetable
             else do
-                updatedSubjects <- editSubject (subjects timetable)
+                updatedSubjects <- editSubject timetable
                 manageTimetable (timetable { subjects = updatedSubjects })
         "4" -> do
             updatedSubjects <- deleteSubject (subjects timetable)
@@ -87,7 +87,7 @@ editTimetable timetables = do
     printHeader "Edit timetable"
 
     if null timetables then do
-        putStrLn "No timetables available."
+        printError "\nNo timetables available.\n"
         return timetables
     else do
         mapM_ (\(i, timetable) -> putStrLn $ show i ++ ". " ++ timetableName timetable) (zip [1..] timetables)
@@ -160,54 +160,64 @@ manageSubject subject timetable = do
             putStr "Subject name: "
             hFlush stdout
             newName <- getLine
-            updateSubject $ subject { subjectName = newName }
+
+            let updatedSubject = subject { subjectName = newName }
+            let updatedSubjects = replaceSubjectInList updatedSubject (subjects timetable)
+            let updatedTimetable = timetable { subjects = updatedSubjects }
+            manageSubject updatedSubject updatedTimetable
             
         "2" -> do
             newLesson <- createLesson
-            updateSubject $ subject { lessons = lessons subject ++ [newLesson] }
-
-        "3" -> do
-            updatedLessons <- editLesson (lessons subject)
-            updateSubject $ subject { lessons = updatedLessons }
-            
-        "4" -> do
-            updatedLessons <- deleteLesson (lessons subject)
-            updateSubject $ subject { lessons = updatedLessons }
-            
-        ""  -> return subject
-        _   -> printError "\nInvalid choice!\n\n"   >> manageSubject subject timetable
-
-    where
-        updateSubject updatedSubject = do
+            let updatedSubject = subject { lessons = lessons subject ++ [newLesson] }
             let updatedSubjects = replaceSubjectInList updatedSubject (subjects timetable)
             let updatedTimetable = timetable { subjects = updatedSubjects }
             manageSubject updatedSubject updatedTimetable
 
+        "3" -> do
+            updatedLessons <- editLesson (lessons subject)
+            let updatedSubject = subject { lessons = updatedLessons }
+            let updatedSubjects = replaceSubjectInList updatedSubject (subjects timetable)
+            let updatedTimetable = timetable { subjects = updatedSubjects }
+            manageSubject updatedSubject updatedTimetable
+            
+        "4" -> do
+            updatedLessons <- deleteLesson (lessons subject)
+            let updatedSubject = subject { lessons = updatedLessons }
+            let updatedSubjects = replaceSubjectInList updatedSubject (subjects timetable)
+            let updatedTimetable = timetable { subjects = updatedSubjects }
+            manageSubject updatedSubject updatedTimetable
+            
+        ""  -> return subject
+
+        _   -> printError "\nInvalid choice!\n\n"   >> manageSubject subject timetable
+
+-- Replace a subject in a list of subjects
 replaceSubjectInList :: Subject -> [Subject] -> [Subject]
 replaceSubjectInList newSubject subjects = 
     zipWith (\oldSubject index -> if subjectName oldSubject == subjectName newSubject then newSubject else oldSubject) subjects [0..] 
 
-editSubject :: [Subject] -> IO [Subject]
-editSubject subjects = do
+editSubject :: Timetable -> IO [Subject]
+editSubject timetable = do
     -- clearScreen
     printHeader "Edit subject"
-    mapM_ (\(i, subject) -> putStrLn $ show i ++ ". " ++ subjectName subject) (zip [1..] subjects)
+    let subjectList = subjects timetable
+    mapM_ (\(i, subject) -> putStrLn $ show i ++ ". " ++ subjectName subject) (zip [1..] subjectList)
     printExit
 
     putStr "Select a subject to edit:"
     hFlush stdout
     choice <- getLine
     if null choice then
-        return subjects
+        return subjectList
     else
         case readMaybe choice of
-            Just n | n >= 1 && n <= length subjects -> do
-                -- Call manageSubject to edit the selected subject
-                updatedSubjects <- manageSubject (subjects !! (n - 1)) subjects
+            Just n | n >= 1 && n <= length subjectList -> do
+                updatedSubject <- manageSubject (subjectList !! (n - 1)) timetable
+                let updatedSubjects = replaceSubjectInList updatedSubject subjectList
                 return updatedSubjects
             _ -> do
                 printError "Invalid choice."
-                editSubject subjects
+                editSubject timetable
 
 
 deleteSubject :: [Subject] -> IO [Subject]
@@ -267,7 +277,7 @@ editLesson lessons = do
     printHeader "Edit lesson"
 
     if null lessons then do
-        putStrLn "No lessons available."
+        printError "\nNo lessons available.\n"
         return lessons
     else do
         mapM_ (\(i, lesson) -> putStrLn $ show i ++ ". " ++ show (day lesson) ++ " " ++ show (time lesson)) (zip [1..] lessons)

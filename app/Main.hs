@@ -1,9 +1,9 @@
 module Main where
 
 import UI
-import File
 import Timetable
 import System.IO
+import Data.Maybe
 
 mainMenu :: [Timetable] -> IO ()
 mainMenu timetables = do
@@ -19,14 +19,14 @@ mainMenu timetables = do
     hFlush stdout
     choice <- getLine
     case choice of
-        "1" -> createTimetable                      >> mainMenu
-        "2" -> editTimetable timetables             >> mainMenu
-        "3" -> putStrLn "importTimetable"           >> mainMenu
-        "4" -> putStrLn "exportTimetable"           >> mainMenu
+        "1" -> createTimetable                      >> mainMenu timetables
+        "2" -> editTimetable timetables             >> mainMenu timetables
+        "3" -> putStrLn "importTimetable"           >> mainMenu timetables
+        "4" -> putStrLn "exportTimetable"           >> mainMenu timetables
         ""  -> putStrLn "Goodbye!"
-        _   -> printError "\nInvalid choice!\n\n"   >> mainMenu
+        _   -> printError "\nInvalid choice!\n\n"   >> mainMenu timetables
 
 main :: IO ()
 main = do
-    maybeTimetables <- loadTimetable
-    mainMenu
+    maybeTimetables <- loadTimetables
+    mainMenu (fromMaybe [] maybeTimetables)
