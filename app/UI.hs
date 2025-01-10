@@ -17,6 +17,7 @@ printHeader header = do
         line = replicate lineLength '='
 
     setSGR [SetColor Foreground Dull Blue]
+    putStrLn ""
     putStrLn line
     putStrLn (replicate 4 ' ' <> header <> replicate 4 ' ')
     putStrLn line
@@ -26,12 +27,8 @@ printHeader header = do
 printError :: String -> IO()
 printError message = do
     setSGR [SetColor Foreground Dull Red]
-    putStr message
+    putStrLn message
     setSGR [Reset]
-
--- Clear console screen
-clearScreen :: IO ()
-clearScreen = putStr "\ESC[2J"
 
 -- Print unavailable message
 printUnavailable :: String -> IO ()

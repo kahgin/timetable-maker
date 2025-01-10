@@ -77,7 +77,6 @@ executable a-kahgin
                     , aeson
                     , bytestring
                     , directory
-					, filelock
 
     -- Directories containing source files.
     hs-source-dirs:   app

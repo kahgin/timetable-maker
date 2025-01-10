@@ -12,8 +12,8 @@ import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Aeson
 import GHC.Generics
+import Text.Read (readMaybe)
 
--- Data structure for TimeRange
 data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving (Generic, FromJSON, ToJSON)
 
 instance Show TimeRange where
@@ -30,7 +30,7 @@ dayMap = Map.fromList
     , ("sun", Sunday),     ("sunday", Sunday)
     ]
 
--- Validate Day
+-- Helper function to validate a day
 validateDay :: IO DayOfWeek
 validateDay = do
     printExample "Enter day (e.g. Monday, Tue)."
@@ -41,10 +41,10 @@ validateDay = do
     case Map.lookup normalizedInput dayMap of
         Just day -> return day
         Nothing -> do
-            printError "Invalid day.\n"
+            printError "Invalid day."
             validateDay 
 
--- Validate Time
+-- Helper function to validate a time range
 validateTime :: IO TimeRange
 validateTime = do
     printExample "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)."
@@ -55,34 +55,34 @@ validateTime = do
         Just timeRange 
             | isValidTimeOrder timeRange -> return timeRange 
             | otherwise -> do 
-                printError "End time must be after start time.\n"
+                printError "End time must be after start time."
                 validateTime
         Nothing -> do
-            printError "Invalid time format.\n"
+            printError "Invalid time format."
             validateTime
 
--- Helper to check if end time is after start time
+-- Helper function to check if end time is after start time
 isValidTimeOrder :: TimeRange -> Bool
 isValidTimeOrder (TimeRange start end) =
     timeToMinutes start < timeToMinutes end
   where
     timeToMinutes t = todHour t * 60 + todMin t
 
--- Function to parse a time string into TimeOfDay
+-- Helper function to parse a time string into TimeOfDay
 parseTime :: String -> Maybe TimeOfDay
 parseTime timeString =
     parseWithFormat "%l:%M%p" timeString `mplus` -- 9:00am
     parseWithFormat "%l.%M%p" timeString `mplus` -- 9.00am
     parseWithFormat "%l%p" timeString            -- 9am
 
--- Function to try parsing with a given format
+-- Helper function to try parsing with a given format
 parseWithFormat :: String -> String -> Maybe TimeOfDay
 parseWithFormat format timeString =
     case parseTimeM True defaultTimeLocale format timeString of
         Just t -> Just t
         _ -> Nothing
 
--- Function to parse TimeRange string into TimeRange data structure
+-- Helper unction to parse TimeRange string into TimeRange data structure
 parseTimeRange :: String -> Maybe TimeRange
 parseTimeRange time = do
     let (start, end) = break (== '-') time
@@ -90,13 +90,13 @@ parseTimeRange time = do
     endTime <- parseTime (tail end)
     return $ TimeRange startTime endTime
 
-
--- Replace an element in a list at a given index
+-- Helper function to replace an element in a list at a given index
 replaceAt :: Int -> a -> [a] -> [a]
 replaceAt _ _ [] = []
 replaceAt 0 newVal (_:xs) = newVal : xs
 replaceAt n newVal (x:xs) = x : replaceAt (n - 1) newVal xs
 
+-- Helper function to validate a name
 validateName :: String -> [a] -> (a -> String) -> IO String
 validateName typeName list toString = do
     putStr (typeName ++ " name: ")
@@ -105,12 +105,27 @@ validateName typeName list toString = do
 
     case newName of
         "" -> do
-            printError "Name cannot be empty.\n"
+            printError "Name cannot be empty."
             validateName typeName list toString
         _ -> do
             if any (\x -> toString x == newName) list 
                 then do
-                    printError "Name already exists.\n"
+                    printError "Name already exists."
                     validateName typeName list toString
                 else 
                     return newName
+
+-- Helper function to select an item (either subject or timetable)
+selectItem :: String -> [a] -> (a -> String) -> IO (Maybe Int)
+selectItem header items name = do
+    printHeader header
+    mapM_ (\(i, item) -> putStrLn $ show i ++ ". " ++ name item) (zip [1..] items)
+    printExit
+    putStr "Select option: "
+    hFlush stdout
+    choice <- getLine
+    case choice of
+        "" -> return Nothing
+        _  -> case readMaybe choice of
+            Just n | n >= 1 && n <= length items -> return (Just (n - 1))
+            _ -> printError "Invalid choice." >> selectItem header items name
