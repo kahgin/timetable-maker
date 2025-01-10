@@ -19,7 +19,7 @@ mainMenu timetables = do
     hFlush stdout
     choice <- getLine
     case choice of
-        "1" -> createTimetable                      >> mainMenu timetables
+        "1" -> createTimetable timetables           >> mainMenu timetables
         "2" -> editTimetable timetables             >> mainMenu timetables
         "3" -> putStrLn "importTimetable"           >> mainMenu timetables
         "4" -> putStrLn "exportTimetable"           >> mainMenu timetables

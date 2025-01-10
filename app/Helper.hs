@@ -96,3 +96,21 @@ replaceAt :: Int -> a -> [a] -> [a]
 replaceAt _ _ [] = []
 replaceAt 0 newVal (_:xs) = newVal : xs
 replaceAt n newVal (x:xs) = x : replaceAt (n - 1) newVal xs
+
+validateName :: String -> [a] -> (a -> String) -> IO String
+validateName typeName list toString = do
+    putStr (typeName ++ " name: ")
+    hFlush stdout
+    newName <- getLine
+
+    case newName of
+        "" -> do
+            printError "Name cannot be empty.\n"
+            validateName typeName list toString
+        _ -> do
+            if any (\x -> toString x == newName) list 
+                then do
+                    printError "Name already exists.\n"
+                    validateName typeName list toString
+                else 
+                    return newName
