@@ -63,8 +63,7 @@ executable a-kahgin
     -- Modules included in this executable, other than Main.
     other-modules:    UI
                     , Helper
-					, File
-					, Timetable
+                    , Timetable
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -75,8 +74,9 @@ executable a-kahgin
                     , text
                     , ansi-terminal
                     , containers
-					, aeson
-					, bytestring
+                    , aeson
+                    , bytestring
+                    , directory
 
     -- Directories containing source files.
     hs-source-dirs:   app

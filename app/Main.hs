@@ -27,4 +27,6 @@ mainMenu = do
         _   -> printError "\nInvalid choice!\n\n"   >> mainMenu
 
 main :: IO ()
-main = mainMenu
+main = do
+    maybeTimetables <- loadTimetable
+    mainMenu
