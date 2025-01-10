@@ -27,8 +27,8 @@ data Subject = Subject {
 data Lesson = Lesson {
     day :: DayOfWeek,
     time :: TimeRange,
-    room :: String,
-    lecturer :: String
+    room :: Maybe String,
+    lecturer :: Maybe String
     } deriving (Show, Generic, FromJSON, ToJSON)
 
 -- Create a new timetable
@@ -54,9 +54,10 @@ manageTimetable timetable = do
     putStrLn "4. Delete a subject"
     printExit
 
-    putStr "Select option (1-3): "
+    putStr "Select option (1-4): "
     hFlush stdout
     choice <- getLine
+
     case choice of
         "1" -> do
             putStr "Timetable name: "
@@ -64,16 +65,20 @@ manageTimetable timetable = do
             newName <- getLine
             manageTimetable (timetable { timetableName = newName })
         "2" -> do
-            createSubject
-            manageTimetable timetable
+            newSubject <- createSubject timetable
+            manageTimetable (timetable { subjects = subjects timetable ++ [newSubject] })
         "3" -> do
-            editSubject (subjects timetable)
-            manageTimetable timetable
+            if null (subjects timetable) then do
+                putStrLn "No subjects available."
+                manageTimetable timetable
+            else do
+                updatedSubjects <- editSubject (subjects timetable)
+                manageTimetable (timetable { subjects = updatedSubjects })
         "4" -> do
-            deleteSubject (subjects timetable)
-            manageTimetable timetable
+            updatedSubjects <- deleteSubject (subjects timetable)
+            manageTimetable (timetable { subjects = updatedSubjects })
         ""  -> return timetable
-        _   -> printError "\nInvalid choice!\n\n"   >> manageTimetable timetable
+        _   -> printError "\nInvalid choice!\n\n" >> manageTimetable timetable
 
 -- Edit a timetable
 editTimetable :: [Timetable] -> IO [Timetable]
@@ -85,18 +90,19 @@ editTimetable timetables = do
         putStrLn "No timetables available."
         return timetables
     else do
-        putStrLn "Select a timetable to edit:"
         mapM_ (\(i, timetable) -> putStrLn $ show i ++ ". " ++ timetableName timetable) (zip [1..] timetables)
-        putStr "Select option: "
+        printExit
+        
+        putStr "Select a timetable to edit: "
         hFlush stdout
         choice <- getLine
-        case readMaybe choice of
-            Just n | n >= 1 && n <= length timetables -> manageTimetable (timetables !! (n - 1)) >>= \updatedTimetable ->
-                return $ replaceAt (n - 1) updatedTimetable timetables
-            _ -> do
-                printError "Invalid choice."
-                editTimetable timetables
 
+        case choice of
+            "" -> return timetables
+            _  -> case readMaybe choice of
+                    Just n | n >= 1 && n <= length timetables -> manageTimetable (timetables !! (n - 1)) >>= \updatedTimetable ->
+                        return $ replaceAt (n - 1) updatedTimetable timetables
+                    _ -> printError "Invalid choice." >> editTimetable timetables
 
 -- Delete a timetable
 deleteTimetable :: [Timetable] -> IO [Timetable]
@@ -104,34 +110,38 @@ deleteTimetable timetables = do
     -- clearScreen
     printHeader "Delete Timetable"
     mapM_ (\(i, t) -> putStrLn $ show i ++ ". " ++ timetableName t) (zip [1..] timetables)
-    putStr "Select timetable to delete (or Enter to cancel): "
+    printExit
+
+    putStr "Select timetable to delete: "
     hFlush stdout
     choice <- getLine
-    case readMaybe choice of
-        Just n | n >= 1 && n <= length timetables -> do
-            let updatedTimetables = take (n - 1) timetables ++ drop (n + 1) timetables 
-            saveTimetables (TimetableList updatedTimetables)
-            return updatedTimetables
-
+    
+    case choice of
         "" -> return timetables
-        _  -> printError "Invalid input" >> deleteTimetable timetables
+        _  -> case readMaybe choice of
+            Just n | n >= 1 && n <= length timetables -> do
+                let updatedTimetables = take (n - 1) timetables ++ drop n timetables
+                saveTimetables updatedTimetables
+                return updatedTimetables
+
+            _  -> printError "Invalid choice." >> deleteTimetable timetables
 
 -- Create a new subject
-createSubject :: IO Subject
-createSubject = do
-    clearScreen
+createSubject :: Timetable -> IO Subject
+createSubject timetable = do
+    -- clearScreen
     printHeader "Add a subject"
     putStr "Subject name: "
     hFlush stdout
     subjectName <- getLine
 
     let newSubject = Subject { subjectName = subjectName, lessons = [] }
-    manageSubject newSubject
+    manageSubject newSubject timetable
 
 -- Manage subject   
-manageSubject :: Subject -> IO ()
-manageSubject subject = do
-    clearScreen
+manageSubject :: Subject -> Timetable -> IO Subject
+manageSubject subject timetable = do
+    -- clearScreen
     printHeader (subjectName subject)
     unless (null $ lessons subject) $ displayLessons (lessons subject)
 
@@ -144,6 +154,7 @@ manageSubject subject = do
     putStr "Select option (1-4): "
     hFlush stdout
     choice <- getLine
+
     case choice of
         "1" -> do
             putStr "Subject name: "
@@ -163,41 +174,40 @@ manageSubject subject = do
             updatedLessons <- deleteLesson (lessons subject)
             updateSubject $ subject { lessons = updatedLessons }
             
-        ""  -> return ()
-        _   -> printError "\nInvalid choice!\n\n"   >> manageSubject subject
+        ""  -> return subject
+        _   -> printError "\nInvalid choice!\n\n"   >> manageSubject subject timetable
 
     where
         updateSubject updatedSubject = do
-            let updatedTimetables = updateSubjectsList updatedSubject
-            saveTimetables updatedTimetables
-            manageSubject updatedSubject
+            let updatedSubjects = replaceSubjectInList updatedSubject (subjects timetable)
+            let updatedTimetable = timetable { subjects = updatedSubjects }
+            manageSubject updatedSubject updatedTimetable
 
-updateSubjectsList :: Subject -> [Timetable]
-updateSubjectsList updatedSubject = 
-        map updateTimetable timetables
-    where
-        updateTimetable timetable = 
-            timetable { subjects = map replaceSubject (subjects timetable) }
-        replaceSubject subj
-            | subjectName subj == subjectName updatedSubject = updatedSubject
-            | otherwise = subj
+replaceSubjectInList :: Subject -> [Subject] -> [Subject]
+replaceSubjectInList newSubject subjects = 
+    zipWith (\oldSubject index -> if subjectName oldSubject == subjectName newSubject then newSubject else oldSubject) subjects [0..] 
 
-editSubject :: [Subject] -> IO ()
+editSubject :: [Subject] -> IO [Subject]
 editSubject subjects = do
     -- clearScreen
     printHeader "Edit subject"
+    mapM_ (\(i, subject) -> putStrLn $ show i ++ ". " ++ subjectName subject) (zip [1..] subjects)
+    printExit
 
-    if null subjects then do
-        putStrLn "No subjects available."
-    else do
-        putStrLn "Select a subject to edit:"
-        mapM_ (\(i, subject) -> putStrLn $ show i ++ ". " ++ subjectName subject) (zip [1..] subjects)
-        putStr "Select option: "
-        hFlush stdout
-        choice <- getLine
+    putStr "Select a subject to edit:"
+    hFlush stdout
+    choice <- getLine
+    if null choice then
+        return subjects
+    else
         case readMaybe choice of
-            Just n | n >= 1 && n <= length subjects -> manageSubject (subjects !! (n - 1))
-            _ -> printError "Invalid choice."
+            Just n | n >= 1 && n <= length subjects -> do
+                -- Call manageSubject to edit the selected subject
+                updatedSubjects <- manageSubject (subjects !! (n - 1)) subjects
+                return updatedSubjects
+            _ -> do
+                printError "Invalid choice."
+                editSubject subjects
 
 
 deleteSubject :: [Subject] -> IO [Subject]
@@ -225,8 +235,8 @@ displayLessons lessons = do
         printLessonWithBorder (lesson, index) = do
             putStrLn $ "Day: " ++ show (day lesson)
             putStrLn $ "Time: " ++ show (time lesson)
-            -- putStrLn $ "Room: " ++ room lesson
-            -- putStrLn $ "Lecturer: " ++ lecturer lesson
+            putStrLn $ "Room: " ++ maybe "" id (room lesson)
+            putStrLn $ "Lecturer: " ++ maybe "" id (lecturer lesson)
             if index == length lessons then return () else putStrLn $ replicate 30 '-'
 
 -- Create a new lesson
@@ -241,11 +251,13 @@ createLesson = do
 
     putStr "Room (optional): "
     hFlush stdout
-    room <- getLine
+    roomInput <- getLine
+    let room = if null room then Nothing else Just roomInput
 
     putStr "Lecturer (optional): "
     hFlush stdout
-    lecturer <- getLine
+    lecturerInput <- getLine
+    let lecturer = if null lecturer then Nothing else Just lecturerInput
 
     return Lesson { day = day, time = time, room = room, lecturer = lecturer }
 
@@ -288,12 +300,12 @@ editLesson lessons = do
                 putStr "Enter new room: "
                 hFlush stdout
                 newRoom <- getLine
-                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { room = newRoom }) lessons
+                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { room = if null newRoom then Nothing else Just newRoom }) lessons
             Just 4 -> do 
                 putStr "Enter new lecturer: "
                 hFlush stdout
                 newLecturer <- getLine
-                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { lecturer = newLecturer }) lessons
+                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { lecturer = if null newLecturer then Nothing else Just newLecturer }) lessons
             Just 5 -> return lessons -- Cancel editing
             _ -> do
                 printError "Invalid choice."

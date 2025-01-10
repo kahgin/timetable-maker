@@ -5,8 +5,8 @@ import File
 import Timetable
 import System.IO
 
-mainMenu :: IO ()
-mainMenu = do
+mainMenu :: [Timetable] -> IO ()
+mainMenu timetables = do
     -- clearScreen
     printHeader "Welcome to Timetable Creator!"
     putStrLn "1. Create a new timetable"
@@ -20,7 +20,7 @@ mainMenu = do
     choice <- getLine
     case choice of
         "1" -> createTimetable                      >> mainMenu
-        "2" -> editTimetable                        >> mainMenu
+        "2" -> editTimetable timetables             >> mainMenu
         "3" -> putStrLn "importTimetable"           >> mainMenu
         "4" -> putStrLn "exportTimetable"           >> mainMenu
         ""  -> putStrLn "Goodbye!"
