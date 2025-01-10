@@ -10,6 +10,7 @@ palettes =
     , ("Wildflower", ["#d4ace0", "#d78393", "#f2aead", "#f7e9de", "#cf89ae"])
     ]
 
+-- Print header
 printHeader :: String -> IO ()
 printHeader header = do
     let lineLength = length header + 8
@@ -21,27 +22,32 @@ printHeader header = do
     putStrLn line
     setSGR [Reset]
 
+-- Print error message
 printError :: String -> IO()
 printError message = do
     setSGR [SetColor Foreground Dull Red]
     putStr message
     setSGR [Reset]
 
+-- Clear console screen
 clearScreen :: IO ()
 clearScreen = putStr "\ESC[2J"
 
+-- Print unavailable message
 printUnavailable :: String -> IO ()
 printUnavailable message = do
     setSGR [SetColor Foreground Vivid Black]
     putStrLn message
     setSGR [Reset]
 
+-- Print example message
 printExample :: String -> IO ()
 printExample message = do
     setSGR [SetColor Foreground Dull Cyan]
     putStrLn message
     setSGR [Reset]
 
+-- Print exit instruction
 printExit :: IO ()
 printExit = do
     setSGR [SetColor Foreground Dull Blue]

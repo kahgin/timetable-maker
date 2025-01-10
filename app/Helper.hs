@@ -1,3 +1,6 @@
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveAnyClass #-}
+
 module Helper where
 
 import UI
@@ -7,9 +10,11 @@ import Data.Time
 import Control.Monad (mplus)
 import Data.Map (Map)
 import qualified Data.Map as Map
+import Data.Aeson
+import GHC.Generics
 
 -- Data structure for TimeRange
-data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay }
+data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving (Generic, FromJSON, ToJSON)
 
 instance Show TimeRange where
     show (TimeRange start end) = formatTime defaultTimeLocale "%I:%M%p" start ++ " - " ++ formatTime defaultTimeLocale "%I:%M%p" end
@@ -84,3 +89,10 @@ parseTimeRange time = do
     startTime <- parseTime start
     endTime <- parseTime (tail end)
     return $ TimeRange startTime endTime
+
+
+-- Replace an element in a list at a given index
+replaceAt :: Int -> a -> [a] -> [a]
+replaceAt _ _ [] = []
+replaceAt 0 newVal (_:xs) = newVal : xs
+replaceAt n newVal (x:xs) = x : replaceAt (n - 1) newVal xs
