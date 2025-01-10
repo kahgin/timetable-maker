@@ -13,6 +13,7 @@ import Control.Monad
 import Text.Read (readMaybe)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
+import Data.List (findIndex)
 
 data Timetable = Timetable {
     timetableName :: String,
@@ -27,14 +28,14 @@ data Subject = Subject {
 data Lesson = Lesson {
     day :: DayOfWeek,
     time :: TimeRange,
-    room :: Maybe String,
-    lecturer :: Maybe String
+    room :: String,
+    lecturer :: String
     } deriving (Show, Generic, FromJSON, ToJSON)
 
 -- Create a new timetable
 createTimetable :: [Timetable] -> IO Timetable
 createTimetable timetables = do
-    clearScreen
+    -- clearScreen
     printHeader "Add a new timetable"
     timetableName <- validateName "Timetable" (map timetableName timetables) id
 
@@ -60,9 +61,13 @@ manageTimetable timetable timetables = do
         "1" -> do
             printHeader "Edit timetable name"
             newName <- validateName "Timetable" (map timetableName timetables) id
+            let updatedTimetable = timetable { timetableName = newName }
+            saveTimetables $ updateTimetableInList updatedTimetable timetables
             manageTimetable (timetable { timetableName = newName }) timetables
         "2" -> do
             newSubject <- createSubject timetable timetables
+            let updatedTimetable = timetable { subjects = subjects timetable ++ [newSubject] }
+            saveTimetables $ updateTimetableInList updatedTimetable timetables
             manageTimetable (timetable { subjects = subjects timetable ++ [newSubject] }) timetables
         "3" -> do
             if null (subjects timetable) then do
@@ -70,13 +75,26 @@ manageTimetable timetable timetables = do
                 manageTimetable timetable timetables
             else do
                 updatedSubjects <- editSubject timetable timetables
+                let updatedTimetable = timetable { subjects = updatedSubjects }
+                saveTimetables $ updateTimetableInList updatedTimetable timetables
                 manageTimetable (timetable { subjects = updatedSubjects }) timetables
         "4" -> do
             updatedSubjects <- deleteSubject (subjects timetable)
+            let updatedTimetable = timetable { subjects = updatedSubjects }
+            saveTimetables $ updateTimetableInList updatedTimetable timetables
             manageTimetable (timetable { subjects = updatedSubjects }) timetables
-        ""  -> return timetable
+        ""  -> do
+            saveTimetables $ updateTimetableInList timetable timetables
+            return timetable
         _   -> printError "\nInvalid choice!\n\n" >> manageTimetable timetable timetables
 
+updateTimetableInList :: Timetable -> [Timetable] -> [Timetable]
+updateTimetableInList updatedTimetable [] = [updatedTimetable]
+updateTimetableInList updatedTimetable timetables = 
+    case findIndex (\t -> timetableName t == timetableName updatedTimetable) timetables of
+        Just idx -> take idx timetables ++ [updatedTimetable] ++ drop (idx + 1) timetables
+        Nothing -> timetables ++ [updatedTimetable]
+        
 -- Edit a timetable
 editTimetable :: [Timetable] -> IO [Timetable]
 editTimetable timetables = do
@@ -183,7 +201,6 @@ manageSubject subject timetable timetables = do
             let updatedTimetables = map (\t -> if timetableName t == timetableName currentTimetable 
                                               then updatedTimetable 
                                               else t) allTimetables
-            saveTimetables updatedTimetables
             manageSubject updatedSubject updatedTimetable updatedTimetables
 
 -- Replace a subject in a list of subjects
@@ -217,7 +234,7 @@ editSubject timetable timetables = do
 
 deleteSubject :: [Subject] -> IO [Subject]
 deleteSubject subjects = do
-    clearScreen
+    -- clearScreen
     printHeader "Delete Subject"
     mapM_ (\(i, s) -> putStrLn $ show i ++ ". " ++ subjectName s) (zip [1..] subjects)
     putStr "Select subject to delete (or Enter to cancel): "
@@ -240,8 +257,8 @@ displayLessons lessons = do
         printLessonWithBorder (lesson, index) = do
             putStrLn $ "Day: " ++ show (day lesson)
             putStrLn $ "Time: " ++ show (time lesson)
-            --putStrLn $ "Room: " ++ maybe "" id (room lesson)
-            --putStrLn $ "Lecturer: " ++ maybe "" id (lecturer lesson)
+            putStrLn $ "Room: " ++ room lesson
+            putStrLn $ "Lecturer: " ++ lecturer lesson
             if index == length lessons then return () else putStrLn $ replicate 30 '-'
             
 -- Create a new lesson
@@ -256,13 +273,11 @@ createLesson = do
 
     putStr "Room (optional): "
     hFlush stdout
-    roomInput <- getLine
-    let room = if null room then Nothing else Just roomInput
+    room <- getLine
 
     putStr "Lecturer (optional): "
     hFlush stdout
-    lecturerInput <- getLine
-    let lecturer = if null lecturer then Nothing else Just lecturerInput
+    lecturer <- getLine
 
     return Lesson { day = day, time = time, room = room, lecturer = lecturer }
 
@@ -301,12 +316,12 @@ editLesson lessons = do
                 putStr "Enter new room: "
                 hFlush stdout
                 newRoom <- getLine
-                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { room = if null newRoom then Nothing else Just newRoom }) lessons
+                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { room = newRoom }) lessons
             Just 4 -> do 
                 putStr "Enter new lecturer: "
                 hFlush stdout
                 newLecturer <- getLine
-                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { lecturer = if null newLecturer then Nothing else Just newLecturer }) lessons
+                return $ replaceAt (selectedLessonIndex - 1) (selectedLesson { lecturer = newLecturer }) lessons
             Just 5 -> return lessons
             _ -> do
                 printError "Invalid choice."
@@ -325,7 +340,7 @@ getValidLessonIndex lessons = do
 
 deleteLesson :: [Lesson] -> IO [Lesson]
 deleteLesson lessons = do
-    clearScreen
+    -- clearScreen
     printHeader "Delete Lesson"
     mapM_ (\(i, l) -> putStrLn $ show i ++ ". " ++ show (day l) ++ " " ++ show (time l)) (zip [1..] lessons)
     putStr "Select lesson to delete (or Enter to cancel): "
@@ -341,7 +356,9 @@ deleteLesson lessons = do
 type TimetableList = [Timetable]
 
 saveTimetables :: TimetableList -> IO ()
-saveTimetables ts = B.writeFile "timetables.json" (encode ts)
+saveTimetables ts = do
+    print ts
+    B.writeFile "timetables.json" (encode ts)
 
 loadTimetables :: IO (Maybe TimetableList)
 loadTimetables = do
