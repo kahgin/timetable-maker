@@ -64,7 +64,6 @@ executable a-kahgin
     other-modules:    UI
                     , Helper
                     , Timetable
-					, Import
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -78,9 +77,6 @@ executable a-kahgin
                     , aeson >= 2.2 && < 2.3
                     , bytestring
                     , directory
-					, filepath
-					, html
-					, tagsoup
 
     -- Directories containing source files.
     hs-source-dirs:   app

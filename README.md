@@ -1,9 +1,7 @@
 # Timetable
 
 ## What it does
-1. Read timetable from html file
-2. Create timetable
-3. Export timetable in csv format
+Manage your timetable with this simple command line application. You can add, remove, and export your timetable into a csv file. Each timetable is ensured that there are no overlapping lessons.
 
 ## Pre-requisites
 1. Haskell

@@ -3,7 +3,6 @@ module Main where
 import UI
 import Helper
 import Timetable
-import Import
 import Data.Maybe
 
 mainMenu :: [Timetable] -> IO ()
@@ -12,7 +11,6 @@ mainMenu timetables = do
     putStrLn "1. Create a new timetable"
     putStrLn "2. Edit a timetable"
     putStrLn "3. Delete a timetable"
-    putStrLn "4. Import timetable"
     printExit
     choice <- getInput "Select option (1-4): "
 
@@ -35,10 +33,6 @@ mainMenu timetables = do
             updatedTimetable <- deleteTimetable timetables
             saveTimetables updatedTimetable
             mainMenu updatedTimetable
-        "4" -> do
-            newTimetableList <- importTimetable timetables
-            saveTimetables newTimetableList
-            mainMenu newTimetableList
         ""  -> putStrLn "Goodbye!"
         _   -> printError "\nInvalid choice!" >> mainMenu timetables
 

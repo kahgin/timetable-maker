@@ -69,6 +69,13 @@ isValidTimeOrder (TimeRange start end) =
   where
     timeToMinutes t = todHour t * 60 + todMin t
 
+-- Helper function to check if two time ranges overlap
+isOverlap :: TimeRange -> TimeRange -> Bool
+isOverlap (TimeRange start1 end1) (TimeRange start2 end2) =
+    timeToMinutes start1 < timeToMinutes end2 && timeToMinutes start2 < timeToMinutes end1
+  where
+    timeToMinutes t = todHour t * 60 + todMin t
+
 -- Helper function to parse a time string into TimeOfDay
 parseTime :: String -> Maybe TimeOfDay
 parseTime timeString =

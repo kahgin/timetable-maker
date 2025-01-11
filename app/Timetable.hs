@@ -10,6 +10,7 @@ import Data.Aeson (FromJSON, ToJSON, encode, decode)
 import GHC.Generics (Generic)
 import Control.Monad (unless)
 import Text.Read (readMaybe)
+import Data.Maybe (listToMaybe)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
 import Data.List (findIndex)
@@ -148,12 +149,14 @@ manageSubject subject timetable timetables = do
             updateSubjectInTimetable updatedSubject timetable timetables
             
         "2" -> do
-            newLesson <- createLesson
-            let updatedSubject = subject { lessons = lessons subject ++ [newLesson] }
-            updateSubjectInTimetable updatedSubject timetable timetables
-
+            newLesson <- createLesson timetable
+            case newLesson of
+                Just newLesson -> do
+                    let updatedSubject = subject { lessons = lessons subject ++ [newLesson] }
+                    updateSubjectInTimetable updatedSubject timetable timetables
+                Nothing -> manageSubject subject timetable timetables
         "3" -> do
-            if (null $ lessons subject) then do
+            if null $ lessons subject then do
                 printError "No lessons available."
                 manageSubject subject timetable timetables
             else do
@@ -227,16 +230,43 @@ displayLessons lessons = do
             if index == length lessons then return () else putStrLn $ replicate 30 '-'
             
 -- Create a new lesson
-createLesson :: IO Lesson
-createLesson = do
+createLesson :: Timetable -> IO (Maybe Lesson)
+createLesson timetable = do
     printHeader "Add a Lesson"
-
     day <- validateDay
     time <- validateTime
-    venue <- getInput "Venue (optional): "
-    lecturer <- getInput "Lecturer (optional): "
+    let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
+    overlappingLesson <- handleOverlappingLesson newLesson timetable
+    case overlappingLesson of
+        Nothing -> return Nothing
+        Just lesson -> do
+            venue <- getInput "Venue (optional): "
+            lecturer <- getInput "Lecturer (optional): "
+            return $ Just lesson { venue = venue, lecturer = lecturer }
 
-    return Lesson { day = day, time = time, venue = venue, lecturer = lecturer }
+-- Check for an overlapping lesson and return the subject name and the lesson
+checkOverlappingLesson :: Lesson -> Timetable -> Maybe (Subject, Lesson)
+checkOverlappingLesson newLesson timetable =
+    listToMaybe [(subject, lesson) | subject <- subjects timetable, lesson <- lessons subject, day lesson == day newLesson, isOverlap (time lesson) (time newLesson)]
+
+-- Handle overlapping lesson
+handleOverlappingLesson :: Lesson -> Timetable -> IO (Maybe Lesson)
+handleOverlappingLesson newLesson timetable = do
+    case checkOverlappingLesson newLesson timetable of
+        Nothing -> return $ Just newLesson
+        Just (subject, overlappingLesson) -> do
+            printError $ "Overlapping lesson found in " ++ subjectName subject ++ " " ++ show (day overlappingLesson) ++ " " ++ show (time overlappingLesson)
+            putStrLn "1. Re-enter day & time"
+            putStrLn "2. Stop adding current lesson"
+            choice <- getInput "Select option: "
+            case choice of
+                "1" -> do
+                    day <- validateDay
+                    time <- validateTime
+                    let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" } 
+                    handleOverlappingLesson newLesson timetable
+                "2" -> return Nothing
+                _ -> printError "Invalid choice." >> handleOverlappingLesson newLesson timetable
 
 -- Edit a lesson
 editLesson :: [Lesson] -> IO [Lesson]
