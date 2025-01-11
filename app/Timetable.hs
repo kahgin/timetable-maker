@@ -61,7 +61,7 @@ manageTimetable timetable timetables = do
             let updatedTimetable = timetable { timetableName = newName }
             manageTimetable (timetable { timetableName = newName }) timetables
         "2" -> do
-            newSubject <- createSubject timetable timetables
+            newSubject <- createSubject timetable
             let updatedTimetable = timetable { subjects = subjects timetable ++ [newSubject] }
             manageTimetable (timetable { subjects = subjects timetable ++ [newSubject] }) timetables
         "3" -> do
@@ -69,7 +69,7 @@ manageTimetable timetable timetables = do
                 printError "No subjects available."
                 manageTimetable timetable timetables
             else do
-                updatedSubjects <- editSubject timetable timetables
+                updatedSubjects <- editSubject timetable
                 let updatedTimetable = timetable { subjects = updatedSubjects }
                 manageTimetable (timetable { subjects = updatedSubjects }) timetables
         "4" -> do
@@ -122,17 +122,17 @@ displaySubjectsWithLessons subjects = do
             if null (lessons subject) then printError "\nNo lessons available.\n" else displayLessons (lessons subject)
 
 -- Create a new subject
-createSubject :: Timetable -> [Timetable] -> IO Subject
-createSubject timetable timetables = do
+createSubject :: Timetable -> IO Subject
+createSubject timetable = do
     printHeader "Add a Subject"
     subjectName <- validateName "Subject" (map subjectName (subjects timetable)) id
 
     let newSubject = Subject { subjectName = subjectName, lessons = [] }
-    manageSubject newSubject timetable timetables
+    manageSubject newSubject timetable
 
 -- Manage subject   
-manageSubject :: Subject -> Timetable -> [Timetable] -> IO Subject
-manageSubject subject timetable timetables = do
+manageSubject :: Subject -> Timetable -> IO Subject
+manageSubject subject timetable = do
     printHeader (subjectName subject)
     unless (null $ lessons subject) $ displayLessons (lessons subject)
     putStrLn "1. Edit subject name"
@@ -146,46 +146,43 @@ manageSubject subject timetable timetables = do
         "1" -> do
             newName <- validateName "Subject" (map subjectName (subjects timetable)) id
             let updatedSubject = subject { subjectName = newName }
-            updateSubjectInTimetable updatedSubject timetable timetables
+            updateSubjectInTimetable updatedSubject timetable
             
         "2" -> do
             newLesson <- createLesson timetable
             case newLesson of
                 Just newLesson -> do
                     let updatedSubject = subject { lessons = lessons subject ++ [newLesson] }
-                    updateSubjectInTimetable updatedSubject timetable timetables
-                Nothing -> manageSubject subject timetable timetables
+                    updateSubjectInTimetable updatedSubject timetable
+                Nothing -> manageSubject subject timetable
         "3" -> do
             if null $ lessons subject then do
                 printError "No lessons available."
-                manageSubject subject timetable timetables
+                manageSubject subject timetable
             else do
                 updatedLessons <- editLesson (lessons subject)
                 let updatedSubject = subject { lessons = updatedLessons }
-                updateSubjectInTimetable updatedSubject timetable timetables
+                updateSubjectInTimetable updatedSubject timetable
         "4" -> do
             if (null $ lessons subject) then do
                 printError "No lessons available."
-                manageSubject subject timetable timetables
+                manageSubject subject timetable
             else do
                 updatedLessons <- deleteLesson (lessons subject)
                 let updatedSubject = subject { lessons = updatedLessons }
-                updateSubjectInTimetable updatedSubject timetable timetables
+                updateSubjectInTimetable updatedSubject timetable
             
         ""  -> return subject
 
-        _   -> printError "Invalid choice!" >> manageSubject subject timetable timetables
+        _   -> printError "Invalid choice!" >> manageSubject subject timetable
 
     where
         -- Update the subject in the timetable
-        updateSubjectInTimetable :: Subject -> Timetable -> [Timetable] -> IO Subject
-        updateSubjectInTimetable updatedSubject currentTimetable allTimetables = do
+        updateSubjectInTimetable :: Subject -> Timetable -> IO Subject
+        updateSubjectInTimetable updatedSubject currentTimetable = do
             let updatedSubjects = replaceSubjectInList updatedSubject (subjects currentTimetable)
             let updatedTimetable = currentTimetable { subjects = updatedSubjects }
-            let updatedTimetables = map (\t -> if timetableName t == timetableName currentTimetable 
-                                              then updatedTimetable 
-                                              else t) allTimetables
-            manageSubject updatedSubject updatedTimetable updatedTimetables
+            manageSubject updatedSubject updatedTimetable
 
         -- Replace a subject in a list of subjects
         replaceSubjectInList :: Subject -> [Subject] -> [Subject]
@@ -193,14 +190,14 @@ manageSubject subject timetable timetables = do
             zipWith (\oldSubject index -> if subjectName oldSubject == subjectName newSubject then newSubject else oldSubject) subjects [0..] 
 
 -- Edit a subject
-editSubject :: Timetable -> [Timetable] -> IO [Subject]
-editSubject timetable timetables = do
+editSubject :: Timetable -> IO [Subject]
+editSubject timetable = do
     let subjectList = subjects timetable
     selectedIdx <- selectItem "Edit subject" subjectList subjectName
     case selectedIdx of
         Nothing -> return subjectList
         Just idx -> do
-            updatedSubject <- manageSubject (subjectList !! idx) timetable timetables
+            updatedSubject <- manageSubject (subjectList !! idx) timetable
             let updatedSubjects = replaceAt idx updatedSubject subjectList
             return updatedSubjects
 
