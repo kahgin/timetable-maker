@@ -35,7 +35,7 @@ data Lesson = Lesson {
     } deriving (Show, Generic, FromJSON, ToJSON)
 
 -- Create a new timetable
-createTimetable :: [Timetable] -> IO Timetable
+createTimetable :: TimetableList -> IO Timetable
 createTimetable timetables = do
     printHeader "Create a new Timetable"
     timetableName <- validateName "Timetable" (map timetableName timetables) id
@@ -43,7 +43,7 @@ createTimetable timetables = do
     manageTimetable newTimetable timetables
 
 -- Manage timetable
-manageTimetable :: Timetable -> [Timetable] -> IO Timetable
+manageTimetable :: Timetable -> TimetableList -> IO Timetable
 manageTimetable timetable timetables = do
     printHeader (timetableName timetable)
     unless (null $ subjects timetable) $ displaySubjectsWithLessons (subjects timetable)
@@ -56,7 +56,7 @@ manageTimetable timetable timetables = do
 
     case choice of
         "1" -> do
-            printHeader "Rename Timetable"
+            printHeader "Edit Timetable Name"
             newName <- validateName "Timetable" (map timetableName timetables) id
             let updatedTimetable = timetable { timetableName = newName }
             manageTimetable (timetable { timetableName = newName }) timetables
@@ -84,7 +84,7 @@ manageTimetable timetable timetables = do
         _   -> printError "Invalid choice!" >> manageTimetable timetable timetables
 
 -- Update the list of timetables with the updated timetable
-updateTimetableInList :: Timetable -> [Timetable] -> [Timetable]
+updateTimetableInList :: Timetable -> TimetableList -> TimetableList
 updateTimetableInList updatedTimetable [] = [updatedTimetable]
 updateTimetableInList updatedTimetable timetables = 
     case findIndex (\t -> timetableName t == timetableName updatedTimetable) timetables of
@@ -92,7 +92,7 @@ updateTimetableInList updatedTimetable timetables =
         Nothing -> timetables ++ [updatedTimetable]
         
 -- Edit a timetable
-editTimetable :: [Timetable] -> IO [Timetable]
+editTimetable :: TimetableList -> IO TimetableList
 editTimetable timetables = do
     idx <- selectItem "Edit a Timetable" timetables timetableName
     case idx of
@@ -102,7 +102,7 @@ editTimetable timetables = do
             return $ replaceAt idx updatedTimetable timetables
 
 -- Delete a timetable
-deleteTimetable :: [Timetable] -> IO [Timetable]
+deleteTimetable :: TimetableList -> IO TimetableList
 deleteTimetable timetables = do
     idx <- selectItem "Delete a Timetable" timetables timetableName
     case idx of
@@ -144,23 +144,22 @@ manageSubject subject timetable = do
 
     case choice of
         "1" -> do
+            printHeader "Edit Subject Name"
             newName <- validateName "Subject" (map subjectName (subjects timetable)) id
             let updatedSubject = subject { subjectName = newName }
             updateSubjectInTimetable updatedSubject timetable
             
         "2" -> do
-            newLesson <- createLesson timetable
-            case newLesson of
-                Just newLesson -> do
-                    let updatedSubject = subject { lessons = lessons subject ++ [newLesson] }
-                    updateSubjectInTimetable updatedSubject timetable
-                Nothing -> manageSubject subject timetable
+            updatedLessons <- createLesson (lessons subject) timetable
+            let updatedSubject = subject { lessons = updatedLessons }
+            updateSubjectInTimetable updatedSubject timetable
+
         "3" -> do
             if null $ lessons subject then do
                 printError "No lessons available."
                 manageSubject subject timetable
             else do
-                updatedLessons <- editLesson (lessons subject)
+                updatedLessons <- editLesson (lessons subject) timetable
                 let updatedSubject = subject { lessons = updatedLessons }
                 updateSubjectInTimetable updatedSubject timetable
         "4" -> do
@@ -181,7 +180,7 @@ manageSubject subject timetable = do
         updateSubjectInTimetable :: Subject -> Timetable -> IO Subject
         updateSubjectInTimetable updatedSubject currentTimetable = do
             let updatedSubjects = replaceSubjectInList updatedSubject (subjects currentTimetable)
-            let updatedTimetable = currentTimetable { subjects = updatedSubjects }
+                updatedTimetable = currentTimetable { subjects = updatedSubjects }
             manageSubject updatedSubject updatedTimetable
 
         -- Replace a subject in a list of subjects
@@ -212,7 +211,7 @@ deleteSubject subjects = do
 -- Display lessons of a subject
 displayLessons :: [Lesson] -> IO ()
 displayLessons lessons = do
-    let border = replicate 30 '='
+    let border = replicate 60 '='
     putStrLn ""
     putStrLn border
     mapM_ printLessonWithBorder (zip lessons [1..])
@@ -224,22 +223,22 @@ displayLessons lessons = do
             putStrLn $ "Time: " ++ show (time lesson)
             putStrLn $ "Venue: " ++ venue lesson
             putStrLn $ "Lecturer: " ++ lecturer lesson
-            if index == length lessons then return () else putStrLn $ replicate 30 '-'
+            if index == length lessons then return () else putStrLn $ replicate 60 '-'
             
 -- Create a new lesson
-createLesson :: Timetable -> IO (Maybe Lesson)
-createLesson timetable = do
+createLesson :: [Lesson] -> Timetable -> IO [Lesson]
+createLesson lessons timetable = do
     printHeader "Add a Lesson"
     day <- validateDay
     time <- validateTime
     let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
-    overlappingLesson <- handleOverlappingLesson newLesson timetable
+    overlappingLesson <- handleOverlapLesson newLesson timetable
     case overlappingLesson of
-        Nothing -> return Nothing
+        Nothing -> return lessons
         Just lesson -> do
             venue <- getInput "Venue (optional): "
             lecturer <- getInput "Lecturer (optional): "
-            return $ Just lesson { venue = venue, lecturer = lecturer }
+            return $ lessons ++ [lesson { venue = venue, lecturer = lecturer }]
 
 -- Check for an overlapping lesson and return the subject name and the lesson
 checkOverlappingLesson :: Lesson -> Timetable -> Maybe (Subject, Lesson)
@@ -247,27 +246,27 @@ checkOverlappingLesson newLesson timetable =
     listToMaybe [(subject, lesson) | subject <- subjects timetable, lesson <- lessons subject, day lesson == day newLesson, isOverlap (time lesson) (time newLesson)]
 
 -- Handle overlapping lesson
-handleOverlappingLesson :: Lesson -> Timetable -> IO (Maybe Lesson)
-handleOverlappingLesson newLesson timetable = do
+handleOverlapLesson :: Lesson -> Timetable -> IO (Maybe Lesson)
+handleOverlapLesson newLesson timetable = do
     case checkOverlappingLesson newLesson timetable of
         Nothing -> return $ Just newLesson
         Just (subject, overlappingLesson) -> do
             printError $ "Overlapping lesson found in " ++ subjectName subject ++ " " ++ show (day overlappingLesson) ++ " " ++ show (time overlappingLesson)
             putStrLn "1. Re-enter day & time"
-            putStrLn "2. Stop adding current lesson"
+            putStrLn "2. Stop adding / editing"
             choice <- getInput "Select option: "
             case choice of
                 "1" -> do
                     day <- validateDay
                     time <- validateTime
                     let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" } 
-                    handleOverlappingLesson newLesson timetable
+                    handleOverlapLesson newLesson timetable
                 "2" -> return Nothing
-                _ -> printError "Invalid choice." >> handleOverlappingLesson newLesson timetable
+                _ -> printError "Invalid choice." >> handleOverlapLesson newLesson timetable
 
 -- Edit a lesson
-editLesson :: [Lesson] -> IO [Lesson]
-editLesson lessons = do
+editLesson :: [Lesson] -> Timetable -> IO [Lesson]
+editLesson lessons timetable = do
     let lessonToString lesson = show (day lesson) ++ " " ++ show (time lesson)
     selectedLesson <- selectItem "Edit lesson" lessons lessonToString
     case selectedLesson of
@@ -285,10 +284,18 @@ editLesson lessons = do
             case readMaybe choice of
                 Just 1 -> do
                     newDay <- validateDay
-                    return $ replaceAt idx (selectedLesson { day = newDay }) lessons
+                    let tempLesson = selectedLesson { day = newDay }
+                    updatedLesson <- handleOverlapLesson tempLesson timetable
+                    case updatedLesson of
+                        Nothing -> editLesson lessons timetable
+                        Just updatedLesson -> return $ replaceAt idx updatedLesson lessons
                 Just 2 -> do
                     newTime <- validateTime
-                    return $ replaceAt idx (selectedLesson { time = newTime }) lessons
+                    let tempLesson = selectedLesson { time = newTime }
+                    updatedLesson <- handleOverlapLesson tempLesson timetable
+                    case updatedLesson of
+                        Nothing -> editLesson lessons timetable
+                        Just updatedLesson -> return $ replaceAt idx updatedLesson lessons
                 Just 3 -> do
                     newVenue <- getInput "Enter new venue: "
                     return $ replaceAt idx (selectedLesson { venue = newVenue }) lessons
@@ -298,7 +305,7 @@ editLesson lessons = do
                 Just 5 -> return lessons
                 _ -> do
                     printError "Invalid choice."
-                    editLesson lessons
+                    editLesson lessons timetable
 
 -- Delete a lesson
 deleteLesson :: [Lesson] -> IO [Lesson]

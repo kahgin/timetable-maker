@@ -5,13 +5,14 @@ import System.Console.ANSI
 -- Print header
 printHeader :: String -> IO ()
 printHeader header = do
-    let lineLength = length header + 8
-        line = replicate lineLength '='
+    let headerWidth = 60
+        padding = (headerWidth - length header) `div` 2
+        line = replicate headerWidth '='
 
     setSGR [SetColor Foreground Dull Blue]
     putStrLn ""
     putStrLn line
-    putStrLn (replicate 4 ' ' <> header <> replicate 4 ' ')
+    putStrLn (replicate padding ' ' <> header <> replicate padding ' ')
     putStrLn line
     setSGR [Reset]
 
@@ -33,5 +34,12 @@ printExample message = do
 printExit :: IO ()
 printExit = do
     setSGR [SetColor Foreground Dull Blue]
-    putStrLn "Press [Enter] to exit.\n"
+    putStrLn "Press [Enter] to exit."
+    setSGR [Reset]
+
+-- Print success message
+printSuccess :: String -> IO ()
+printSuccess message = do
+    setSGR [SetColor Foreground Dull Green]
+    putStrLn message
     setSGR [Reset]

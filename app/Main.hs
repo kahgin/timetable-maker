@@ -5,7 +5,7 @@ import Helper
 import Timetable
 import Data.Maybe
 
-mainMenu :: [Timetable] -> IO ()
+mainMenu :: TimetableList -> IO ()
 mainMenu timetables = do
     printHeader "Welcome to Timetable Creator!"
     putStrLn "1. Create a new timetable"
