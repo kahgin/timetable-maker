@@ -5,11 +5,10 @@ module Timetable where
 
 import UI
 import Helper
-import System.IO
-import Data.Time
-import Data.Aeson
-import GHC.Generics
-import Control.Monad
+import Data.Time (DayOfWeek(..))
+import Data.Aeson (FromJSON, ToJSON, encode, decode)
+import GHC.Generics (Generic)
+import Control.Monad (unless)
 import Text.Read (readMaybe)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
@@ -37,9 +36,8 @@ data Lesson = Lesson {
 -- Create a new timetable
 createTimetable :: [Timetable] -> IO Timetable
 createTimetable timetables = do
-    printHeader "Add a new timetable"
+    printHeader "Create a new Timetable"
     timetableName <- validateName "Timetable" (map timetableName timetables) id
-
     let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
     manageTimetable newTimetable timetables
 
@@ -47,19 +45,17 @@ createTimetable timetables = do
 manageTimetable :: Timetable -> [Timetable] -> IO Timetable
 manageTimetable timetable timetables = do
     printHeader (timetableName timetable)
+    unless (null $ subjects timetable) $ displaySubjectsWithLessons (subjects timetable)
     putStrLn "1. Edit timetable name"
     putStrLn "2. Add a subject"
     putStrLn "3. Edit a subject"
     putStrLn "4. Delete a subject"
     printExit
-
-    putStr "Select option (1-4): "
-    hFlush stdout
-    choice <- getLine
+    choice <- getInput "Select option (1-4): "
 
     case choice of
         "1" -> do
-            printHeader "Edit timetable name"
+            printHeader "Rename Timetable"
             newName <- validateName "Timetable" (map timetableName timetables) id
             let updatedTimetable = timetable { timetableName = newName }
             manageTimetable (timetable { timetableName = newName }) timetables
@@ -97,7 +93,7 @@ updateTimetableInList updatedTimetable timetables =
 -- Edit a timetable
 editTimetable :: [Timetable] -> IO [Timetable]
 editTimetable timetables = do
-    idx <- selectItem "Edit timetable" timetables timetableName
+    idx <- selectItem "Edit a Timetable" timetables timetableName
     case idx of
         Nothing -> return timetables
         Just idx -> do
@@ -107,17 +103,27 @@ editTimetable timetables = do
 -- Delete a timetable
 deleteTimetable :: [Timetable] -> IO [Timetable]
 deleteTimetable timetables = do
-    idx <- selectItem "Delete Timetable" timetables timetableName
+    idx <- selectItem "Delete a Timetable" timetables timetableName
     case idx of
         Nothing -> return timetables
         Just idx -> do
             let updatedTimetables = take idx timetables ++ drop (idx + 1) timetables
             return updatedTimetables
 
+displaySubjectsWithLessons :: [Subject] -> IO ()
+displaySubjectsWithLessons subjects = do
+    let border = replicate 30 '='
+    mapM_ printSubjectWithLessons (zip subjects [1..])
+    where
+        printSubjectWithLessons (subject, index) = do
+            if index == 1 then putStrLn "" else return ()
+            putStrLn $ subjectName subject
+            if null (lessons subject) then printError "\nNo lessons available.\n" else displayLessons (lessons subject)
+
 -- Create a new subject
 createSubject :: Timetable -> [Timetable] -> IO Subject
 createSubject timetable timetables = do
-    printHeader "Add a subject"
+    printHeader "Add a Subject"
     subjectName <- validateName "Subject" (map subjectName (subjects timetable)) id
 
     let newSubject = Subject { subjectName = subjectName, lessons = [] }
@@ -128,16 +134,12 @@ manageSubject :: Subject -> Timetable -> [Timetable] -> IO Subject
 manageSubject subject timetable timetables = do
     printHeader (subjectName subject)
     unless (null $ lessons subject) $ displayLessons (lessons subject)
-
     putStrLn "1. Edit subject name"
     putStrLn "2. Add a lesson"
     putStrLn "3. Edit a lesson"
     putStrLn "4. Delete a lesson"
     printExit
-
-    putStr "Select option (1-4): "
-    hFlush stdout
-    choice <- getLine
+    choice <- getInput "Select option (1-4): "
 
     case choice of
         "1" -> do
@@ -211,9 +213,11 @@ deleteSubject subjects = do
 displayLessons :: [Lesson] -> IO ()
 displayLessons lessons = do
     let border = replicate 30 '='
+    putStrLn ""
     putStrLn border
     mapM_ printLessonWithBorder (zip lessons [1..])
     putStrLn border
+    putStrLn ""
     where
         printLessonWithBorder (lesson, index) = do
             putStrLn $ "Day: " ++ show (day lesson)
@@ -225,19 +229,12 @@ displayLessons lessons = do
 -- Create a new lesson
 createLesson :: IO Lesson
 createLesson = do
-    printHeader "Add a lesson"
+    printHeader "Add a Lesson"
 
     day <- validateDay
-
     time <- validateTime
-
-    putStr "Venue (optional): "
-    hFlush stdout
-    venue <- getLine
-
-    putStr "Lecturer (optional): "
-    hFlush stdout
-    lecturer <- getLine
+    venue <- getInput "Venue (optional): "
+    lecturer <- getInput "Lecturer (optional): "
 
     return Lesson { day = day, time = time, venue = venue, lecturer = lecturer }
 
@@ -256,27 +253,20 @@ editLesson lessons = do
             putStrLn "3. Venue"
             putStrLn "4. Lecturer"
             putStrLn "5. Cancel" 
-
-            putStr "Select option: "
-            hFlush stdout
-            choice <- getLine
+            choice <- getInput "Select option: "
 
             case readMaybe choice of
-                Just 1 -> do 
+                Just 1 -> do
                     newDay <- validateDay
                     return $ replaceAt idx (selectedLesson { day = newDay }) lessons
-                Just 2 -> do 
+                Just 2 -> do
                     newTime <- validateTime
                     return $ replaceAt idx (selectedLesson { time = newTime }) lessons
-                Just 3 -> do 
-                    putStr "Enter new venue: "
-                    hFlush stdout
-                    newVenue <- getLine
+                Just 3 -> do
+                    newVenue <- getInput "Enter new venue: "
                     return $ replaceAt idx (selectedLesson { venue = newVenue }) lessons
-                Just 4 -> do 
-                    putStr "Enter new lecturer: "
-                    hFlush stdout
-                    newLecturer <- getLine
+                Just 4 -> do
+                    newLecturer <- getInput "Enter new lecturer: "
                     return $ replaceAt idx (selectedLesson { lecturer = newLecturer }) lessons
                 Just 5 -> return lessons
                 _ -> do

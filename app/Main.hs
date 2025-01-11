@@ -1,29 +1,27 @@
 module Main where
 
 import UI
+import Helper
 import Timetable
-import System.IO
+import Import
 import Data.Maybe
 
 mainMenu :: [Timetable] -> IO ()
 mainMenu timetables = do
     printHeader "Welcome to Timetable Creator!"
-    putStrLn "1. Create new timetable"
-    putStrLn "2. Edit timetable"
-    putStrLn "3. Delete timetable"
+    putStrLn "1. Create a new timetable"
+    putStrLn "2. Edit a timetable"
+    putStrLn "3. Delete a timetable"
     putStrLn "4. Import timetable"
-    putStrLn "5. Export timetable"
     printExit
+    choice <- getInput "Select option (1-4): "
 
-    putStr "Select option (1-5): "
-    hFlush stdout
-    choice <- getLine
     case choice of
         "1" -> do
             newTimetable <- createTimetable timetables
             let newTimetableList = timetables ++ [newTimetable]
             saveTimetables newTimetableList
-            mainMenu timetables
+            mainMenu newTimetableList
         "2" -> do
             if not (null timetables) 
             then do
@@ -37,10 +35,12 @@ mainMenu timetables = do
             updatedTimetable <- deleteTimetable timetables
             saveTimetables updatedTimetable
             mainMenu updatedTimetable
-        "4" -> putStrLn "importTimetable"           >> mainMenu timetables
-        "5" -> putStrLn "exportTimetable"           >> mainMenu timetables
+        "4" -> do
+            newTimetableList <- importTimetable timetables
+            saveTimetables newTimetableList
+            mainMenu newTimetableList
         ""  -> putStrLn "Goodbye!"
-        _   -> printError "\nInvalid choice!"       >> mainMenu timetables
+        _   -> printError "\nInvalid choice!" >> mainMenu timetables
 
 main :: IO ()
 main = do

@@ -4,11 +4,10 @@
 module Helper where
 
 import UI
-import System.IO
-import Data.Char
+import System.IO (hFlush, stdout)
+import Data.Char (toLower)
 import Data.Time
 import Control.Monad (mplus)
-import Data.Map (Map)
 import qualified Data.Map as Map
 import Data.Aeson
 import GHC.Generics
@@ -30,13 +29,17 @@ dayMap = Map.fromList
     , ("sun", Sunday),     ("sunday", Sunday)
     ]
 
+getInput :: String -> IO String
+getInput prompt = do
+    putStr prompt
+    hFlush stdout
+    getLine
+
 -- Helper function to validate a day
 validateDay :: IO DayOfWeek
 validateDay = do
     printExample "Enter day (e.g. Monday, Tue)."
-    putStr "Day: "
-    hFlush stdout
-    input <- getLine
+    input <- getInput "Day: "
     let normalizedInput = map toLower input
     case Map.lookup normalizedInput dayMap of
         Just day -> return day
@@ -48,9 +51,7 @@ validateDay = do
 validateTime :: IO TimeRange
 validateTime = do
     printExample "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)."
-    putStr "Time: "
-    hFlush stdout
-    timeInput <- getLine
+    timeInput <- getInput "Time: "
     case parseTimeRange timeInput of
         Just timeRange 
             | isValidTimeOrder timeRange -> return timeRange 
@@ -99,9 +100,7 @@ replaceAt n newVal (x:xs) = x : replaceAt (n - 1) newVal xs
 -- Helper function to validate a name
 validateName :: String -> [a] -> (a -> String) -> IO String
 validateName typeName list toString = do
-    putStr (typeName ++ " name: ")
-    hFlush stdout
-    newName <- getLine
+    newName <- getInput (typeName ++ " name: ")
 
     case newName of
         "" -> do
@@ -121,9 +120,7 @@ selectItem header items name = do
     printHeader header
     mapM_ (\(i, item) -> putStrLn $ show i ++ ". " ++ name item) (zip [1..] items)
     printExit
-    putStr "Select option: "
-    hFlush stdout
-    choice <- getLine
+    choice <- getInput "Select option: "
     case choice of
         "" -> return Nothing
         _  -> case readMaybe choice of
