@@ -5,7 +5,7 @@ import System.Console.ANSI
 -- Print header
 printHeader :: String -> IO ()
 printHeader header = do
-    let headerWidth = 60
+    let headerWidth = 180
         padding = (headerWidth - length header) `div` 2
         line = replicate headerWidth '='
 

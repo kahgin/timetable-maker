@@ -37,6 +37,8 @@ viewTimetable timetables = do
 -- Print timetable in a formatted table, showing the days as rows and time slots as columns
 printTimetable :: Timetable -> IO ()
 printTimetable timetable = do
+    clearScreen
+    printHeader $ timetableName timetable
     let groupedLessons = groupByDay timetable
         days = enumFromTo Monday Friday
         startTime = TimeOfDay 8 0 0  -- 8:00 AM
