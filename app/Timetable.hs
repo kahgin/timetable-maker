@@ -40,9 +40,10 @@ createTimetable timetables = do
     printHeader "Create a new Timetable"
     timetableName <- validateName "Timetable" (map timetableName timetables) id
     let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
+    printSuccess "Timetable created successfully."
     manageTimetable newTimetable timetables
 
--- Manage timetable
+-- Display a menu for user to either edit timetable name or manage subjects (add, edit, delete) in the timetable
 manageTimetable :: Timetable -> TimetableList -> IO Timetable
 manageTimetable timetable timetables = do
     printHeader (timetableName timetable)
@@ -91,7 +92,7 @@ updateTimetableInList updatedTimetable timetables =
         Just idx -> take idx timetables ++ [updatedTimetable] ++ drop (idx + 1) timetables
         Nothing -> timetables ++ [updatedTimetable]
         
--- Edit a timetable
+-- Display a menu for user to select a timetable to edit
 editTimetable :: TimetableList -> IO TimetableList
 editTimetable timetables = do
     idx <- selectItem "Edit a Timetable" timetables timetableName
@@ -101,7 +102,7 @@ editTimetable timetables = do
             updatedTimetable <- manageTimetable (timetables !! idx) timetables
             return $ replaceAt idx updatedTimetable timetables
 
--- Delete a timetable
+-- Display a menu for user to select a timetable to delete
 deleteTimetable :: TimetableList -> IO TimetableList
 deleteTimetable timetables = do
     idx <- selectItem "Delete a Timetable" timetables timetableName
@@ -109,8 +110,10 @@ deleteTimetable timetables = do
         Nothing -> return timetables
         Just idx -> do
             let updatedTimetables = take idx timetables ++ drop (idx + 1) timetables
+            printSuccess "Timetable deleted successfully."
             return updatedTimetables
 
+-- Display all subjects with their corresponding lessons in a timetable
 displaySubjectsWithLessons :: [Subject] -> IO ()
 displaySubjectsWithLessons subjects = do
     let border = replicate 30 '='
@@ -126,11 +129,11 @@ createSubject :: Timetable -> IO Subject
 createSubject timetable = do
     printHeader "Add a Subject"
     subjectName <- validateName "Subject" (map subjectName (subjects timetable)) id
-
     let newSubject = Subject { subjectName = subjectName, lessons = [] }
+    printSuccess "Subject added successfully."
     manageSubject newSubject timetable
 
--- Manage subject   
+-- Display a menu for user to either edit subject name or manage lessons (add, edit, delete) in the subject
 manageSubject :: Subject -> Timetable -> IO Subject
 manageSubject subject timetable = do
     printHeader (subjectName subject)
@@ -147,6 +150,7 @@ manageSubject subject timetable = do
             printHeader "Edit Subject Name"
             newName <- validateName "Subject" (map subjectName (subjects timetable)) id
             let updatedSubject = subject { subjectName = newName }
+            printSuccess "Subject name updated successfully."
             updateSubjectInTimetable updatedSubject timetable
             
         "2" -> do
@@ -188,7 +192,7 @@ manageSubject subject timetable = do
         replaceSubjectInList newSubject subjects = 
             zipWith (\oldSubject index -> if subjectName oldSubject == subjectName newSubject then newSubject else oldSubject) subjects [0..] 
 
--- Edit a subject
+-- Display a menu for user to select a subject to edit
 editSubject :: Timetable -> IO [Subject]
 editSubject timetable = do
     let subjectList = subjects timetable
@@ -200,15 +204,17 @@ editSubject timetable = do
             let updatedSubjects = replaceAt idx updatedSubject subjectList
             return updatedSubjects
 
--- Delete a subject
+-- Display a menu for user to select a subject to delete
 deleteSubject :: [Subject] -> IO [Subject]
 deleteSubject subjects = do
     selectedIdx <- selectItem "Delete subject" subjects subjectName
     case selectedIdx of
         Nothing -> return subjects
-        Just idx -> return (take idx subjects ++ drop (idx + 1) subjects)
+        Just idx -> do
+            printSuccess "Subject deleted successfully."
+            return (take idx subjects ++ drop (idx + 1) subjects)
 
--- Display lessons of a subject
+-- Display all lessons of a subject
 displayLessons :: [Lesson] -> IO ()
 displayLessons lessons = do
     let border = replicate 60 '='
@@ -238,14 +244,15 @@ createLesson lessons timetable = do
         Just lesson -> do
             venue <- getInput "Venue (optional): "
             lecturer <- getInput "Lecturer (optional): "
+            printSuccess "Lesson added successfully."
             return $ lessons ++ [lesson { venue = venue, lecturer = lecturer }]
 
--- Check for an overlapping lesson and return the subject name and the lesson
+-- Check if overlapping lesson exist and return the subject name and the lesson if found
 checkOverlappingLesson :: Lesson -> Timetable -> Maybe (Subject, Lesson)
 checkOverlappingLesson newLesson timetable =
     listToMaybe [(subject, lesson) | subject <- subjects timetable, lesson <- lessons subject, day lesson == day newLesson, isOverlap (time lesson) (time newLesson)]
 
--- Handle overlapping lesson
+-- Display a menu for user to handle overlapping lesson (re-enter day & time or stop adding / editing)
 handleOverlapLesson :: Lesson -> Timetable -> IO (Maybe Lesson)
 handleOverlapLesson newLesson timetable = do
     case checkOverlappingLesson newLesson timetable of
@@ -264,7 +271,7 @@ handleOverlapLesson newLesson timetable = do
                 "2" -> return Nothing
                 _ -> printError "Invalid choice." >> handleOverlapLesson newLesson timetable
 
--- Edit a lesson
+-- Display a menu for user to select a lesson to edit, then prompt the user to choose which field to edit
 editLesson :: [Lesson] -> Timetable -> IO [Lesson]
 editLesson lessons timetable = do
     let lessonToString lesson = show (day lesson) ++ " " ++ show (time lesson)
@@ -283,31 +290,41 @@ editLesson lessons timetable = do
 
             case readMaybe choice of
                 Just 1 -> do
+                    printMessage $ "Current day: " ++ show (day selectedLesson)
                     newDay <- validateDay
                     let tempLesson = selectedLesson { day = newDay }
                     updatedLesson <- handleOverlapLesson tempLesson timetable
                     case updatedLesson of
                         Nothing -> editLesson lessons timetable
-                        Just updatedLesson -> return $ replaceAt idx updatedLesson lessons
+                        Just updatedLesson -> do
+                            printSuccess "Lesson updated successfully."
+                            return $ replaceAt idx updatedLesson lessons
                 Just 2 -> do
+                    printMessage $ "Current time: " ++ show (time selectedLesson)
                     newTime <- validateTime
                     let tempLesson = selectedLesson { time = newTime }
                     updatedLesson <- handleOverlapLesson tempLesson timetable
                     case updatedLesson of
                         Nothing -> editLesson lessons timetable
-                        Just updatedLesson -> return $ replaceAt idx updatedLesson lessons
+                        Just updatedLesson -> do
+                            printSuccess "Lesson updated successfully."
+                            return $ replaceAt idx updatedLesson lessons
                 Just 3 -> do
+                    printMessage $ "Current venue: " ++ venue selectedLesson
                     newVenue <- getInput "Enter new venue: "
+                    printSuccess "Lesson updated successfully."
                     return $ replaceAt idx (selectedLesson { venue = newVenue }) lessons
                 Just 4 -> do
+                    printMessage $ "Current lecturer: " ++ lecturer selectedLesson
                     newLecturer <- getInput "Enter new lecturer: "
+                    printSuccess "Lesson updated successfully."
                     return $ replaceAt idx (selectedLesson { lecturer = newLecturer }) lessons
                 Just 5 -> return lessons
                 _ -> do
                     printError "Invalid choice."
                     editLesson lessons timetable
 
--- Delete a lesson
+-- Display a menu for user to select a lesson to delete
 deleteLesson :: [Lesson] -> IO [Lesson]
 deleteLesson lessons = do
     let lessonToString lesson = show (day lesson) ++ " " ++ show (time lesson)
@@ -316,6 +333,7 @@ deleteLesson lessons = do
         Nothing -> return lessons
         Just idx -> do
             let updatedLessons = take idx lessons ++ drop (idx + 1) lessons
+            printSuccess "Lesson deleted successfully."
             return updatedLessons
 
 -- Save timetables to json file

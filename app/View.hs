@@ -11,7 +11,11 @@ import Control.Monad (forM_)
 import Data.Char (toUpper)
 import Debug.Trace
 
--- Group lessons by day
+-- Adjustable column width for timetable
+columnWidth :: Int
+columnWidth = 15
+
+-- Group lessons by day, returns a map of days with their list of lessons
 groupByDay :: Timetable -> Map.Map DayOfWeek [(String, String, String, String)] -- [Day, (Time, Subject, Venue, Lecturer)]
 groupByDay timetable = 
     foldl' insertLesson Map.empty allLessons 
@@ -21,22 +25,22 @@ groupByDay timetable =
         | subject <- subjects timetable, lesson <- lessons subject]
     insertLesson acc (day, lessonInfo) = Map.alter (Just . maybe [lessonInfo] (lessonInfo :)) day acc
 
--- Output timetable
-outputTimetable :: TimetableList -> IO ()
-outputTimetable timetables = do
+-- Display a menu for user to select a timetable to view
+viewTimetable :: TimetableList -> IO ()
+viewTimetable timetables = do
     idx <- selectItem "Print a Timetable" timetables timetableName
     case idx of
         Nothing -> return ()
         Just idx -> do
             printTimetable (timetables !! idx) >> return ()
 
--- Print timetable
+-- Print timetable in a formatted table, showing the days as rows and time slots as columns
 printTimetable :: Timetable -> IO ()
 printTimetable timetable = do
     let groupedLessons = groupByDay timetable
-        days = [Monday, Tuesday, Wednesday, Thursday, Friday]
+        days = enumFromTo Monday Friday
         startTime = TimeOfDay 8 0 0  -- 8:00 AM
-        endTime = TimeOfDay 18 0 0   -- 6:00 PM
+        endTime = TimeOfDay 19 0 0   -- 7:00 PM
         times = generateTimeSlots startTime endTime
         width = (length times + 1) * columnWidth
         line = replicate width '='
@@ -51,10 +55,10 @@ printTimetable timetable = do
         printDayRow times day lessons
     putStrLn line
 
--- Generate time slots dynamically
+-- Generate a list of time slots based on the start and end time, incrementing by 1 hour
 generateTimeSlots :: TimeOfDay -> TimeOfDay -> [String]
 generateTimeSlots start end =
-    let slots = takeWhile (<= end) $ iterate (addHour) start
+    let slots = takeWhile (< end) $ iterate (addHour) start
     in map formatTimeOfDay slots
     where 
         addHour time = TimeOfDay h' m' s'
@@ -63,20 +67,7 @@ generateTimeSlots start end =
                 m' = todMin time
                 s' = todSec time
 
-getLessonTimeSlots :: TimeRange -> [String]
-getLessonTimeSlots (TimeRange start end) =
-    let duration = diffMinutes end start
-        diffMinutes (TimeOfDay h1 m1 _) (TimeOfDay h2 m2 _) = (h1 - h2) * 60 + (m1 - m2)
-        numSlots = duration `div` 60  -- Number of hour slots
-        slots = take (fromIntegral numSlots) $ iterate (addHour) start
-    in map formatTimeOfDay slots
-    where 
-        addHour time = TimeOfDay h' m' s'
-            where
-                h' = (todHour time + 1) `mod` 24
-                m' = todMin time
-                s' = todSec time
-
+-- Format TimeOfDay to a 12-hour clock format
 formatTimeOfDay :: TimeOfDay -> String
 formatTimeOfDay time = 
     let formatted = formatTime defaultTimeLocale "%I:%M%p" time
@@ -85,6 +76,7 @@ formatTimeOfDay time =
                          else '0' : tail formatted
     in map toUpper withLeadingZero
 
+-- Print a row of the timetable for a specific day
 printDayRow :: [String] -> DayOfWeek -> [(String, String, String, String)] -> IO ()
 printDayRow times day lessons = do
     let width = (length times + 1) * columnWidth
@@ -132,9 +124,7 @@ printDayRow times day lessons = do
     putStrLn ""
     putStrLn $ replicate width '-'
 
-columnWidth :: Int
-columnWidth = 15
-
+-- Wrap text to fit within a certain width, breaking at spaces, and return a list of lines
 wrapText :: Int -> String -> [String]
 wrapText width text = 
     let words' = words text
@@ -146,6 +136,7 @@ wrapText width text =
             | length acc + 1 + length w <= width = go ws (acc ++ " " ++ w)
             | otherwise = acc : go (w:ws) ""
 
+-- Pad a string to the right with spaces
 padRight :: Int -> String -> String
 padRight width string = 
     let truncated = if length string > width 
@@ -153,6 +144,7 @@ padRight width string =
                    else string
     in truncated ++ replicate (width - length truncated) ' '
 
+-- Find a lesson by time slot
 findLessonByTime :: String -> [(String, String, String, String)] -> Maybe (String, String, String, String)
 findLessonByTime timeStr lessons =
     case filter matchesTime lessons of
@@ -161,7 +153,5 @@ findLessonByTime timeStr lessons =
   where
     matchesTime (timeRangeStr, _, _, _) =
         case parseTimeRange timeRangeStr of
-            Just timeRange -> timeStr `elem` getLessonTimeSlots timeRange
+            Just (TimeRange start end) -> timeStr `elem` generateTimeSlots start end
             Nothing -> False
-
-

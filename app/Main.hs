@@ -6,13 +6,14 @@ import Timetable
 import View
 import Data.Maybe
 
+-- Main menu
 mainMenu :: TimetableList -> IO ()
 mainMenu timetables = do
     printHeader "Welcome to Timetable Creator!"
     putStrLn "1. Create a new timetable"
     putStrLn "2. Edit a timetable"
     putStrLn "3. Delete a timetable"
-    putStrLn "4. Print a timetable"
+    putStrLn "4. View a timetable"
     printExit
     choice <- getInput "Select option (1-4): "
 
@@ -36,12 +37,14 @@ mainMenu timetables = do
             saveTimetables updatedTimetable
             mainMenu updatedTimetable
         "4" -> do
-            outputTimetable timetables
+            viewTimetable timetables
             mainMenu timetables
         ""  -> putStrLn "Goodbye!"
         _   -> printError "\nInvalid choice!" >> mainMenu timetables
 
+-- Entry point
 main :: IO ()
 main = do
+    clearScreen
     maybeTimetables <- loadTimetables
     mainMenu (fromMaybe [] maybeTimetables)

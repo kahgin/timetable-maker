@@ -52,7 +52,7 @@ validateName typeName list toString = do
 -- Validate day
 validateDay :: IO DayOfWeek
 validateDay = do
-    printExample "Enter day (e.g. Monday, Tue)."
+    printMessage "Enter day (e.g. Monday, Tue)."
     input <- getInput "Day: "
     let normalizedInput = map toLower input
     case Map.lookup normalizedInput dayMap of
@@ -64,7 +64,7 @@ validateDay = do
 -- Validate a time range
 validateTime :: IO TimeRange
 validateTime = do
-    printExample "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)."
+    printMessage "Enter time in 12-hour format (e.g. 9am-11am, 9.30am-10.30pm)."
     timeInput <- getInput "Time: "
     case parseTimeRange timeInput of
         Just timeRange 

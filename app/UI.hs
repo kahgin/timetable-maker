@@ -24,8 +24,8 @@ printError message = do
     setSGR [Reset]
 
 -- Print example message
-printExample :: String -> IO ()
-printExample message = do
+printMessage :: String -> IO ()
+printMessage message = do
     setSGR [SetColor Foreground Dull Cyan]
     putStrLn message
     setSGR [Reset]
@@ -41,5 +41,9 @@ printExit = do
 printSuccess :: String -> IO ()
 printSuccess message = do
     setSGR [SetColor Foreground Dull Green]
-    putStrLn message
+    putStrLn $ "\n" ++ message
     setSGR [Reset]
+
+-- Clear screen
+clearScreen :: IO ()
+clearScreen = putStr "\ESC[2J"
