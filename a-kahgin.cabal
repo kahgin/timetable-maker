@@ -64,6 +64,7 @@ executable a-kahgin
     other-modules:    UI
                     , Helper
                     , Timetable
+					, View
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
