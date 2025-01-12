@@ -321,12 +321,10 @@ editLesson lessons timetable =
 deleteLesson :: [Lesson] -> IO [Lesson]
 deleteLesson lessons =
     let lessonToString lesson = show (day lesson) <> " " <> show (time lesson)
-    in selectItem "Delete lesson" lessons lessonToString >>= \selectedLesson ->
-    case selectedLesson of
-        Nothing -> return lessons
-        Just idx ->
-            let updatedLessons = take idx lessons <> drop (idx + 1) lessons
-            in printSuccess "Lesson deleted successfully." >> return updatedLessons
+    in selectItem "Delete lesson" lessons lessonToString >>=
+    maybe (return lessons) (\idx ->
+        printSuccess "Lesson deleted successfully." >>
+        return (take idx lessons <> drop (idx + 1) lessons))
 
 -- Save timetables to json file
 saveTimetables :: TimetableList -> IO ()

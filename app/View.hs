@@ -27,12 +27,11 @@ groupByDay timetable =
 
 -- Display a menu for user to select a timetable to view
 viewTimetable :: TimetableList -> IO ()
-viewTimetable timetables = do
-    idx <- selectItem "Print a Timetable" timetables timetableName
+viewTimetable timetables =
+    selectItem "Print a Timetable" timetables timetableName >>= \idx ->
     case idx of
         Nothing -> return ()
-        Just idx -> do
-            printTimetable (timetables !! idx) >> return ()
+        Just idx -> printTimetable (timetables !! idx) >> return ()
 
 -- Print timetable in a formatted table, showing the days as rows and time slots as columns
 printTimetable :: Timetable -> IO ()
