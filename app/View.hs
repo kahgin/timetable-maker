@@ -36,9 +36,9 @@ viewTimetable timetables = do
 
 -- Print timetable in a formatted table, showing the days as rows and time slots as columns
 printTimetable :: Timetable -> IO ()
-printTimetable timetable = do
-    clearScreen
-    printHeader $ timetableName timetable
+printTimetable timetable =
+    clearScreen >>
+    printHeader (timetableName timetable) >>
     let groupedLessons = groupByDay timetable
         days = enumFromTo Monday Friday
         startTime = TimeOfDay 8 0 0  -- 8:00 AM
@@ -46,28 +46,22 @@ printTimetable timetable = do
         times = generateTimeSlots startTime endTime
         width = (length times + 1) * columnWidth
         line = replicate width '='
-        header = padRight columnWidth "Day" ++ "|" ++ 
-                concatMap (\time -> padRight (columnWidth-1) time ++ "|") times
-
-    putStrLn line
-    putStrLn header
-    putStrLn line
-    forM_ days $ \day -> do
-        let lessons = Map.findWithDefault [] day groupedLessons
-        printDayRow times day lessons
-    putStrLn line
+        header = padRight columnWidth "Day" <> "|" <> concatMap (\time -> padRight (columnWidth-1) time <> "|") times
+    in
+        putStrLn line >>
+        putStrLn header >>
+        putStrLn line >>
+        forM_ days (\day ->
+            let lessons = Map.findWithDefault [] day groupedLessons
+            in printDayRow times day lessons) >>
+        putStrLn line
 
 -- Generate a list of time slots based on the start and end time, incrementing by 1 hour
 generateTimeSlots :: TimeOfDay -> TimeOfDay -> [String]
 generateTimeSlots start end =
-    let slots = takeWhile (< end) $ iterate (addHour) start
+    let slots = takeWhile (< end) $ iterate (addHour 1) start
     in map formatTimeOfDay slots
-    where 
-        addHour time = TimeOfDay h' m' s'
-            where
-                h' = (todHour time + 1) `mod` 24
-                m' = todMin time
-                s' = todSec time
+    where addHour n time = time { todHour = (todHour time + n) `mod` 24 }
 
 -- Format TimeOfDay to a 12-hour clock format
 formatTimeOfDay :: TimeOfDay -> String
@@ -97,32 +91,32 @@ printDayRow times day lessons = do
     forM_ [0..(maxLines-1)] $ \lineNum -> do
         -- Print day name only for first line
         if lineNum == 0
-            then putStr $ padRight columnWidth (show day) ++ "|"
-            else putStr $ padRight columnWidth "" ++ "|"
+            then putStr $ padRight columnWidth (show day) <> "|"
+            else putStr $ padRight columnWidth "" <> "|"
         
         -- Print each subject's current line
         forM_ subjectLines $ \subj -> 
             if lineNum < length subj
-                then putStr $ padRight (columnWidth-1) (subj !! lineNum) ++ "|"
-                else putStr $ padRight (columnWidth-1) "" ++ "|"
+                then putStr $ padRight (columnWidth-1) (subj !! lineNum) <> "|"
+                else putStr $ padRight (columnWidth-1) "" <> "|"
         putStrLn ""
     
     -- Print venue row
-    putStr $ padRight columnWidth "" ++ "|"
+    putStr $ padRight columnWidth "" <> "|"
     forM_ times $ \time -> do
         let lesson = findLessonByTime time lessons
         case lesson of
-            Just (_, _, venue, _) -> putStr $ padRight (columnWidth-1) (if null venue then "" else venue) ++ "|"
-            Nothing -> putStr $ padRight (columnWidth-1) "" ++ "|"
+            Just (_, _, venue, _) -> putStr $ padRight (columnWidth-1) (if null venue then "" else venue) <> "|"
+            Nothing -> putStr $ padRight (columnWidth-1) "" <> "|"
     putStrLn ""
     
     -- Print lecturer row
-    putStr $ padRight columnWidth "" ++ "|"
+    putStr $ padRight columnWidth "" <> "|"
     forM_ times $ \time -> do
         let lesson = findLessonByTime time lessons
         case lesson of
-            Just (_, _, _, lecturer) -> putStr $ padRight (columnWidth-1) (if null lecturer then "" else lecturer) ++ "|"
-            Nothing -> putStr $ padRight (columnWidth-1) "" ++ "|"
+            Just (_, _, _, lecturer) -> putStr $ padRight (columnWidth-1) (if null lecturer then "" else lecturer) <> "|"
+            Nothing -> putStr $ padRight (columnWidth-1) "" <> "|"
     putStrLn ""
     putStrLn $ replicate width '-'
 
@@ -135,7 +129,7 @@ wrapText width text =
         go [] acc = if null acc then [] else [acc]
         go (w:ws) acc
             | null acc = go ws w
-            | length acc + 1 + length w <= width = go ws (acc ++ " " ++ w)
+            | length acc + 1 + length w <= width = go ws (acc <> " " <> w)
             | otherwise = acc : go (w:ws) ""
 
 -- Pad a string to the right with spaces
@@ -144,7 +138,7 @@ padRight width string =
     let truncated = if length string > width 
                    then take width string 
                    else string
-    in truncated ++ replicate (width - length truncated) ' '
+    in truncated <> replicate (width - length truncated) ' '
 
 -- Find a lesson by time slot
 findLessonByTime :: String -> [(String, String, String, String)] -> Maybe (String, String, String, String)
