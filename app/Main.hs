@@ -4,39 +4,61 @@ import UI
 import Helper
 import Timetable
 import View
-import Data.Maybe
+import qualified Data.Map as Map
 
--- Main menu
-mainMenu :: TimetableDB -> IO ()
-mainMenu timetables =
-    printHeader "Welcome to Timetable Creator!" >>
-    putStrLn "1. Create a new timetable" >>
-    putStrLn "2. Edit a timetable" >>
-    putStrLn "3. Delete a timetable" >>
-    putStrLn "4. View a timetable" >>
-    printExit >>
-    getInput "Select option (1-4): " >>= \choice ->
-
-    case choice of
-        "1" ->
-            createTimetable timetables >>= \newTimetable ->
-            let newTimetableDB = timetables <> [newTimetable]
-            in saveTimetables newTimetableDB >> mainMenu newTimetableDB
-        "2" ->
-            if not (null timetables) then
-                editTimetable timetables >>= \updatedTimetables ->
-                saveTimetables updatedTimetables >> mainMenu updatedTimetables
-            else
-                printError "\nNo timetable available." >> mainMenu timetables
-        "3" -> deleteTimetable timetables >>= \updatedTimetables ->
-               saveTimetables updatedTimetables >> mainMenu updatedTimetables
-        "4" -> viewTimetable timetables >> mainMenu timetables
-        ""  -> putStrLn "Goodbye!"
-        _   -> printError "\nInvalid choice!" >> mainMenu timetables
-
--- Entry point
 main :: IO ()
-main =
-    clearScreen >>
-    loadTimetables >>= \maybeTimetables ->
-    mainMenu (fromMaybe [] maybeTimetables)
+main = do
+    clearScreen
+    db <- loadTimetableDB
+    mainMenu db
+
+mainMenu :: TimetableDB -> IO ()
+mainMenu db = do
+    printHeader "Welcome to Timetable Creator!"
+    putStrLn "1. Create a new timetable"
+    putStrLn "2. Edit a timetable"
+    putStrLn "3. Delete a timetable"
+    putStrLn "4. View a timetable"
+    printExit
+    
+    choice <- getInput "Select option (1-5): "
+    case choice of
+        "1" -> do
+            newDb <- createTimetable db
+            let newTimetableName = head [name | (name, _) <- Map.toList newDb, not $ name `Map.member` db]
+            newDb' <- manageTimetableMenu newTimetableName newDb
+            saveTimetableDB newDb'
+            mainMenu newDb'
+            
+        "2" -> do
+            if Map.null db
+                then do
+                    printError "No timetables available."
+                    mainMenu db
+                else do
+                    newDb <- editTimetableMenu db
+                    saveTimetableDB newDb
+                    mainMenu newDb
+                    
+        "3" -> do
+            if Map.null db
+                then do
+                    printError "No timetables available."
+                    mainMenu db
+                else do
+                    newDb <- deleteTimetableMenu db
+                    saveTimetableDB newDb
+                    mainMenu newDb
+                    
+        "4" -> do
+            if Map.null db
+                then printError "No timetables available."
+                else viewTimetableMenu db
+            mainMenu db
+            
+        ""  -> do
+            printMessage "Goodbye!"
+            
+        _ -> do
+            printError "Invalid choice!"
+            mainMenu db

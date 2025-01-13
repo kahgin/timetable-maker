@@ -6,347 +6,474 @@ module Timetable where
 import UI
 import Helper
 import Data.Time (DayOfWeek(..))
-import Data.Aeson (FromJSON, ToJSON, encode, decode)
-import GHC.Generics (Generic)
-import Control.Monad (unless, when)
-import Text.Read (readMaybe)
-import Data.Maybe (maybe, listToMaybe)
+import Data.Aeson (encode, decode)
+import Control.Monad (forM_, unless)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
-import Data.List (findIndex)
+import qualified Data.Map as Map
+import Data.Maybe (fromMaybe, fromJust)
 
 -- APA citation:
 
 -- OpenAI. (2025). ChatGPT [Large language model]. OpenAI. https://www.openai.com
 -- Anthropic. (2025). Claude [AI language model]. Anthropic. https://www.anthropic.com
 
-type TimetableDB = [Timetable]
+type TimetableDB = Map.Map String SubjectMap        -- timetableName -> subjects
+type SubjectMap = Map.Map String LessonMap          -- subjectName -> lessons
+type LessonMap = Map.Map TimeSlot LessonDetails     -- (day,time) -> details
+type TimeSlot = (DayOfWeek, TimeRange) 
+type LessonDetails = (String, String)               -- (venue, lecturer)
 
-data Timetable = Timetable {
-    timetableName :: String,
-    subjects :: [Subject]
-    } deriving (Show, Generic, FromJSON, ToJSON)
-
-instance Semigroup Timetable where
-    (<>) a b = Timetable { 
-        timetableName = timetableName a,
-        subjects = concatMap (appendSubjects (subjects b)) (subjects a)
-        }
-        where
-            appendSubjects :: [Subject] -> Subject -> [Subject]
-            appendSubjects [] subject = [subject]
-            appendSubjects (x:xs) subject
-                | subjectName x == subjectName subject = [subject { lessons = lessons x <> lessons subject }] <> xs
-                | otherwise = x : appendSubjects xs subject
-
-instance Monoid Timetable where
-    mempty = Timetable { timetableName = "", subjects = [] }
-    mappend a b = a <> b
-
-data Subject = Subject { 
-    subjectName :: String,
-    lessons :: [Lesson]
-    } deriving (Show, Generic, FromJSON, ToJSON)
-
-data Lesson = Lesson {
-    day :: DayOfWeek,
-    time :: TimeRange,
-    venue :: String,
-    lecturer :: String
-    } deriving (Show, Generic, FromJSON, ToJSON)
-
--- Create a new timetable
-createTimetable :: TimetableDB -> IO Timetable
-createTimetable timetables =
-    printHeader "Create a new Timetable" >>
-    validateName "Timetable" (map timetableName timetables) id >>= \timetableName ->
-        let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
-        in printSuccess "Timetable created successfully." >> manageTimetable newTimetable timetables
+-- Create a new timetable interactively
+createTimetable :: TimetableDB -> IO TimetableDB
+createTimetable db = do
+    printHeader "Create a new Timetable"
+    name <- validateName "Timetable" db
+    let newDb = Map.insert name Map.empty db
+    printSuccess "Timetable created successfully."
+    return newDb
 
 -- Display a menu for user to either edit timetable name or manage subjects (add, edit, delete) in the timetable
-manageTimetable :: Timetable -> TimetableDB -> IO Timetable
-manageTimetable timetable timetables =
-    printHeader (timetableName timetable) >>
-    unless (null $ subjects timetable) (displaySubjectsWithLessons (subjects timetable)) >>
-    putStrLn "1. Edit timetable name" >>
-    putStrLn "2. Add a subject" >>
-    putStrLn "3. Edit a subject" >>
-    putStrLn "4. Delete a subject" >>
-    printExit >>
-    getInput "Select option (1-4): " >>= \choice ->
-        case choice of
-            "1" ->
-                printHeader "Edit Timetable Name" >>
-                validateName "Timetable" (map timetableName timetables) id >>= \newName ->
-                    let updatedTimetable = timetable { timetableName = newName }
-                    in manageTimetable (timetable { timetableName = newName }) timetables
-            "2" ->
-                createSubject timetable >>= \newSubject ->
-                    let updatedTimetable = timetable { subjects = subjects timetable <> [newSubject] }
-                    in manageTimetable (timetable { subjects = subjects timetable <> [newSubject] }) timetables
-            "3" ->
-                if null (subjects timetable) then
-                    printError "No subjects available." >>
-                    manageTimetable timetable timetables
-                else
-                    editSubject timetable >>= \updatedSubjects ->
-                        let updatedTimetable = timetable { subjects = updatedSubjects }
-                        in manageTimetable (timetable { subjects = updatedSubjects }) timetables
-            "4" ->
-                if null (subjects timetable) then
-                    printError "No subjects available." >>
-                    manageTimetable timetable timetables
-                else
-                    deleteSubject (subjects timetable) >>= \updatedSubjects ->
-                        let updatedTimetable = timetable { subjects = updatedSubjects }
-                        in manageTimetable (timetable { subjects = updatedSubjects }) timetables
-            ""  -> saveTimetables (updateTimetableInList timetable timetables) >> return timetable
-            _   -> printError "Invalid choice!" >> manageTimetable timetable timetables
+manageTimetableMenu :: String -> TimetableDB -> IO TimetableDB
+manageTimetableMenu tName db = do
+    printHeader tName
+    case Map.lookup tName db of
+        Just subjects -> 
+            unless (Map.null subjects) $ do
+                putStrLn "\nCurrent Subjects and Lessons:"
+                forM_ (Map.toList subjects) $ \(sName, lessons) -> do
+                    putStrLn $ "\nSubject: " <> sName
+                    if Map.null lessons
+                        then printMessage "No lessons available."
+                        else displayLessons lessons
+        Nothing -> putStr ""
 
--- Update the list of timetables with the updated timetable
-updateTimetableInList :: Timetable -> TimetableDB -> TimetableDB
-updateTimetableInList updatedTimetable [] = [updatedTimetable]
-updateTimetableInList updatedTimetable timetables = 
-    case findIndex (\t -> timetableName t == timetableName updatedTimetable) timetables of
-        Just idx -> take idx timetables <> [updatedTimetable] <> drop (idx + 1) timetables
-        Nothing -> timetables <> [updatedTimetable]
+    putStrLn "1. Edit timetable name"
+    putStrLn "2. Add a subject"
+    putStrLn "3. Edit a subject"
+    putStrLn "4. Delete a subject"
+    
+    choice <- getInput "Select option (1-4): "
+    case choice of
+        "1" -> do
+            newDb <- editTimetableName tName db
+            let newName = head [name | (name, subjects) <- Map.toList newDb, subjects == (fromJust $ Map.lookup tName db)]
+            manageTimetableMenu newName newDb
+            
+        "2" -> do
+            newDb <- createSubject tName db
+            case [name | (name, _) <- Map.toList (fromJust $ Map.lookup tName newDb), 
+                        name `notElem` map fst (Map.toList (fromMaybe Map.empty $ Map.lookup tName db))] of
+                (newSubject:_) -> do
+                    newerDb <- manageSubjectMenu tName newSubject newDb
+                    manageTimetableMenu tName newerDb
+                _ -> manageTimetableMenu tName newDb
+            
+        "3" -> case Map.lookup tName db of
+            Nothing -> do
+                printError "Timetable not found."
+                return db
+            Just subjects -> 
+                if Map.null subjects
+                    then do
+                        printError "No subjects available."
+                        manageTimetableMenu tName db
+                    else do
+                        newDb <- editSubjectMenu tName db
+                        manageTimetableMenu tName newDb
+                        
+        "4" -> case Map.lookup tName db of
+            Nothing -> do
+                printError "Timetable not found."
+                return db
+            Just subjects -> 
+                if Map.null subjects
+                    then do
+                        printError "No subjects available."
+                        manageTimetableMenu tName db
+                    else do
+                        newDb <- deleteSubjectMenu tName db
+                        manageTimetableMenu tName newDb
+                        
+        ""  -> return db
         
+        _   -> do
+            printError "Invalid choice!"
+            manageTimetableMenu tName db
+
+-- Display functions
+displaySubjectsWithLessons :: SubjectMap -> IO ()
+displaySubjectsWithLessons subjects = do
+    let border = replicate 30 '='
+    putStrLn ""
+    putStrLn border
+    forM_ (Map.toList subjects) $ \(subjectName, lessons) -> do
+        putStrLn $ "Subject: " <> subjectName
+        if Map.null lessons 
+            then printError "No lessons available.\n"
+            else displayLessons lessons
+        putStrLn border
+
+displayLessons :: Map.Map TimeSlot LessonDetails -> IO ()
+displayLessons lessons = do
+    let border = replicate 60 '='
+    putStrLn ""
+    putStrLn border
+    forM_ (Map.toList lessons) $ \((day, timeRange), (venue, lecturer)) -> do
+        putStrLn $ "Day: " <> show day
+        putStrLn $ "Time: " <> show timeRange
+        putStrLn $ "Venue: " <> venue
+        putStrLn $ "Lecturer: " <> lecturer
+        putStrLn $ replicate 60 '-'
+    putStrLn border
+    putStrLn ""
+
 -- Display a menu for user to select a timetable to edit
-editTimetable :: TimetableDB -> IO TimetableDB
-editTimetable timetables =
-    selectItem "Edit a Timetable" timetables timetableName >>= \idx ->
-        case idx of
-            Nothing -> return timetables
-            Just idx ->
-                manageTimetable (timetables !! idx) timetables >>= \updatedTimetable ->
-                    return $ replaceAt idx updatedTimetable timetables
+editTimetableMenu :: TimetableDB -> IO TimetableDB
+editTimetableMenu db = do
+    printHeader "Edit a Timetable"
+    mapM_ (\(name, _) -> putStrLn $ "- " <> name) (Map.toList db)
+    tName <- getInput "Enter timetable name: "
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just _ -> manageTimetableMenu tName db
+
+-- Check for time conflicts
+hasTimeConflict :: TimeSlot -> LessonMap -> Bool
+hasTimeConflict (day, timeRange) lessons =
+    not $ null $ Map.filterWithKey isConflicting lessons
+    where
+        isConflicting (d, tr) _ = d == day && isOverlap timeRange tr
 
 -- Display a menu for user to select a timetable to delete
-deleteTimetable :: TimetableDB -> IO TimetableDB
-deleteTimetable timetables =
-    selectItem "Delete a Timetable" timetables timetableName >>= \idx ->
-        case idx of
-            Nothing -> return timetables
-            Just idx ->
-                let updatedTimetables = take idx timetables <> drop (idx + 1) timetables
-                in printSuccess "Timetable deleted successfully." >> return updatedTimetables
-            
--- Display all subjects with their corresponding lessons in a timetable
-displaySubjectsWithLessons :: [Subject] -> IO ()
-displaySubjectsWithLessons subjects =
-    let border = replicate 30 '=' 
-    in mapM_ printSubjectWithLessons (zip subjects [1..])
-    where
-        printSubjectWithLessons (subject, index) =
-            (when (index == 1) (putStrLn "")) >>
-            putStrLn (subjectName subject) >>
-            if null (lessons subject) then printError "\nNo lessons available.\n" else displayLessons (lessons subject)
-            
--- Create a new subject
-createSubject :: Timetable -> IO Subject
-createSubject timetable = 
-    printHeader "Add a Subject" >> 
-    (validateName "Subject" (map subjectName (subjects timetable)) id >>= \subjectName -> 
-        let newSubject = Subject { subjectName = subjectName, lessons = [] } 
-        in printSuccess "Subject added successfully." >> manageSubject newSubject timetable)
+deleteTimetable :: String -> TimetableDB -> IO TimetableDB
+deleteTimetable name db = do
+    case Map.lookup name db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just _ -> do
+            confirmed <- confirmAction $ "Are you sure you want to delete timetable '" <> name <> "'?"
+            if confirmed
+                then do
+                    let newDb = Map.delete name db
+                    printSuccess "Timetable deleted successfully."
+                    return newDb
+                else do
+                    printMessage "Deletion cancelled."
+                    return db
+
+-- Create a new subject interactively
+createSubject :: String -> TimetableDB -> IO TimetableDB
+createSubject tName db = do
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> do
+            printHeader "Add a Subject"
+            sName <- validateName "Subject" subjects
+            let newSubjects = Map.insert sName Map.empty subjects
+                newDb = Map.insert tName newSubjects db
+            printSuccess "Subject created successfully."
+            return newDb
 
 -- Display a menu for user to either edit subject name or manage lessons (add, edit, delete) in the subject
-manageSubject :: Subject -> Timetable -> IO Subject
-manageSubject subject timetable = 
-    printHeader (subjectName subject) >> 
-    unless (null $ lessons subject) (displayLessons (lessons subject)) >> 
-    putStrLn "1. Edit subject name" >> 
-    putStrLn "2. Add a lesson" >> 
-    putStrLn "3. Edit a lesson" >> 
-    putStrLn "4. Delete a lesson" >> 
-    printExit >>
-    getInput "Select option (1-4): " >>= \choice ->
-        case choice of
-            "1" -> 
-                printHeader "Edit Subject Name" >> 
-                validateName "Subject" (map subjectName (subjects timetable)) id >>= \newName -> 
-                    let updatedSubject = subject { subjectName = newName }
-                    in printSuccess "Subject name updated successfully." >>
-                        updateSubjectInTimetable updatedSubject timetable
+manageSubjectMenu :: String -> String -> TimetableDB -> IO TimetableDB
+manageSubjectMenu tName sName db = do
+    printHeader sName
 
-            "2" -> 
-                createLesson (lessons subject) timetable >>= \updatedLessons -> 
-                    let updatedSubject = subject { lessons = updatedLessons }
-                    in updateSubjectInTimetable updatedSubject timetable
+    case Map.lookup tName db >>= Map.lookup sName of
+        Just lessons -> displayLessons lessons
+        Nothing -> putStr ""
 
-            "3" -> 
-                if null $ lessons subject then
-                    printError "No lessons available." >>
-                    manageSubject subject timetable
-                else
-                    editLesson (lessons subject) timetable >>= \updatedLessons -> 
-                        let updatedSubject = subject { lessons = updatedLessons }
-                        in updateSubjectInTimetable updatedSubject timetable
+    putStrLn "1. Edit subject name"
+    putStrLn "2. Add a lesson"
+    putStrLn "3. Edit a lesson"
+    putStrLn "4. Delete a lesson"
+    printExit
 
-            "4" -> 
-                if null $ lessons subject then
-                    printError "No lessons available." >>
-                    manageSubject subject timetable
-                else
-                    deleteLesson (lessons subject) >>= \updatedLessons -> 
-                        let updatedSubject = subject { lessons = updatedLessons }
-                        in updateSubjectInTimetable updatedSubject timetable
+    choice <- getInput "Select option (1-4): "
+    case choice of
+        "1" -> do
+            newDb <- editSubjectName tName sName db
+            manageTimetableMenu tName newDb
+            
+        "2" -> do
+            newDb <- createLesson tName sName db
+            manageSubjectMenu tName sName newDb
+            
+        "3" -> do
+            newDb <- handleLessonOperation editLesson tName sName "Edit" db
+            manageSubjectMenu tName sName newDb
+            
+        "4" -> do
+            newDb <- handleLessonOperation deleteLesson tName sName "Delete" db
+            manageSubjectMenu tName sName newDb
+            
+        ""  -> manageTimetableMenu tName db
+        
+        _ -> do
+            printError "Invalid choice!"
+            manageSubjectMenu tName sName db
 
-            "" -> return subject
+handleLessonOperation :: (String -> String -> TimeSlot -> TimetableDB -> IO TimetableDB) -> String -> String -> String -> TimetableDB -> IO TimetableDB
+handleLessonOperation operation tName sName opType db = do
+    printHeader $ opType <> " Lesson"
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> do
+            printError "Subject not found."
+            return db
+        Just lessons -> 
+            if Map.null lessons
+                then do
+                    printError "No lessons available."
+                    return db
+                else do
+                    displayLessons lessons
+                    day <- validateDay
+                    timeRange <- validateTime
+                    let timeSlot = (day, timeRange)
+                    operation tName sName timeSlot db
 
-            _ -> printError "Invalid choice!" >> manageSubject subject timetable
-    where
-        -- Update the subject in the timetable
-        updateSubjectInTimetable :: Subject -> Timetable -> IO Subject
-        updateSubjectInTimetable updatedSubject currentTimetable = 
-            let updatedSubjects = zipWith (\oldSubject index -> if subjectName oldSubject == subjectName updatedSubject then updatedSubject else oldSubject) (subjects currentTimetable) [0..]
-                updatedTimetable = currentTimetable { subjects = updatedSubjects }
-            in manageSubject updatedSubject updatedTimetable
+-- Edit timetable name
+editTimetableName :: String -> TimetableDB -> IO TimetableDB
+editTimetableName oldName db = do
+    case Map.lookup oldName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> do
+            printHeader "Edit Timetable Name"
+            newName <- validateName "New timetable" (Map.delete oldName db)
+            let newDb = Map.insert newName subjects $ Map.delete oldName db
+            printSuccess "Timetable renamed successfully."
+            return newDb
+
+-- Edit subject name
+editSubjectName :: String -> String -> TimetableDB -> IO TimetableDB
+editSubjectName tName oldName db = do
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> case Map.lookup oldName subjects of
+            Nothing -> do
+                printError "Subject not found."
+                return db
+            Just lessons -> do
+                printHeader "Edit Subject Name"
+                newName <- validateName "New subject" (Map.delete oldName subjects)
+                let newSubjects = Map.insert newName lessons $ Map.delete oldName subjects
+                    newDb = Map.insert tName newSubjects db
+                printSuccess "Subject renamed successfully."
+                return newDb
 
 -- Display a menu for user to select a subject to edit
-editSubject :: Timetable -> IO [Subject]
-editSubject timetable =
-    let subjectList = subjects timetable
-    in selectItem "Edit subject" subjectList subjectName >>= \selectedIdx ->
-        case selectedIdx of
-            Nothing -> return subjectList
-            Just idx ->
-                manageSubject (subjectList !! idx) timetable >>= \updatedSubject ->
-                    let updatedSubjects = replaceAt idx updatedSubject subjectList
-                    in return updatedSubjects
+editSubjectMenu :: String -> TimetableDB -> IO TimetableDB
+editSubjectMenu tName db = do
+    printHeader "Edit Subject"
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> do
+            mapM_ (\(name, _) -> putStrLn $ "- " <> name) (Map.toList subjects)
+            sName <- getInput "Enter subject name: "
+            case Map.lookup sName subjects of
+                Nothing -> do
+                    printError "Subject not found."
+                    return db
+                Just _ -> manageSubjectMenu tName sName db
+
+deleteSubjectMenu :: String -> TimetableDB -> IO TimetableDB
+deleteSubjectMenu tName db = do
+    printHeader "Delete a Subject"
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> do
+            mapM_ (\(name, _) -> putStrLn $ "- " <> name) (Map.toList subjects)
+            sName <- getInput "Enter subject name to delete: "
+            deleteSubject tName sName db
 
 -- Display a menu for user to select a subject to delete
-deleteSubject :: [Subject] -> IO [Subject]
-deleteSubject subjects =
-    selectItem "Delete subject" subjects subjectName >>= \selectedIdx ->
-        case selectedIdx of
-            Nothing -> return subjects
-            Just idx ->
-                printSuccess "Subject deleted successfully." >>
-                return (take idx subjects <> drop (idx + 1) subjects)
+deleteSubject :: String -> String -> TimetableDB -> IO TimetableDB
+deleteSubject tName sName db = do
+    case Map.lookup tName db of
+        Nothing -> do
+            printError "Timetable not found."
+            return db
+        Just subjects -> case Map.lookup sName subjects of
+            Nothing -> do
+                printError "Subject not found."
+                return db
+            Just _ -> do
+                confirmed <- confirmAction $ "Are you sure you want to delete subject '" <> sName <> "'?"
+                if confirmed
+                    then do
+                        let newSubjects = Map.delete sName subjects
+                            newDb = Map.insert tName newSubjects db
+                        printSuccess "Subject deleted successfully."
+                        return newDb
+                    else do
+                        printMessage "Deletion cancelled."
+                        return db
 
--- Display all lessons of a subject
-displayLessons :: [Lesson] -> IO ()
-displayLessons lessons =
-    let border = replicate 60 '='
-    in  putStrLn "" >>
-        putStrLn border >>
-        mapM_ printLessonWithBorder (zip lessons [1..]) >>
-        putStrLn border >>
-        putStrLn ""
-    where
-        printLessonWithBorder (lesson, index) =
-            putStrLn ("Day: " <> show (day lesson)) >>
-            putStrLn ("Time: " <> show (time lesson)) >>
-            putStrLn ("Venue: " <> venue lesson) >>
-            putStrLn ("Lecturer: " <> lecturer lesson) >>
-            (if index == length lessons then return () else putStrLn $ replicate 60 '-')
-            
--- Create a new lesson
-createLesson :: [Lesson] -> Timetable -> IO [Lesson]
-createLesson lessons timetable =
-    printHeader "Add a Lesson" >>
-    validateDay >>= \day ->
-        validateTime >>= \time ->
-            let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
-            in handleOverlapLesson newLesson timetable >>= \overlappingLesson ->
-                case overlappingLesson of
-                    Nothing -> return lessons
-                    Just lesson ->
-                        getInput "Venue (optional): " >>= \venue ->
-                            getInput "Lecturer (optional): " >>= \lecturer ->
-                                printSuccess "Lesson added successfully." >>
-                                return (lessons <> [lesson { venue = venue, lecturer = lecturer }])
-
--- Check if overlapping lesson exist and return the subject name and the lesson if found
-checkOverlappingLesson :: Lesson -> Timetable -> Maybe (Subject, Lesson)
-checkOverlappingLesson newLesson timetable =
-    listToMaybe [(subject, lesson) | subject <- subjects timetable, lesson <- lessons subject, day lesson == day newLesson, isOverlap (time lesson) (time newLesson)]
-
--- Display a menu for user to handle overlapping lesson (re-enter day & time or stop adding / editing)
-handleOverlapLesson :: Lesson -> Timetable -> IO (Maybe Lesson)
-handleOverlapLesson newLesson timetable =
-    case checkOverlappingLesson newLesson timetable of
-        Nothing -> return $ Just newLesson
-        Just (subject, overlappingLesson) ->
-            printError ("Overlapping lesson found in " <> subjectName subject <> " " <> show (day overlappingLesson) <> " " <> show (time overlappingLesson)) >>
-            putStrLn "1. Re-enter day & time" >>
-            putStrLn "2. Stop adding / editing" >>
-            getInput "Select option: " >>= \choice ->
-                case choice of
-                    "1" -> 
-                        validateDay >>= \day ->
-                            validateTime >>= \time ->
-                                let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
-                                in handleOverlapLesson newLesson timetable
-                    "2" -> return Nothing
-                    _   -> printError "Invalid choice." >> handleOverlapLesson newLesson timetable
+-- Create a new lesson interactively
+createLesson :: String -> String -> TimetableDB -> IO TimetableDB
+createLesson tName sName db = do
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> do
+            printError "Timetable or subject not found."
+            return db
+        Just lessons -> do
+            printHeader "Add a Lesson"
+            day <- validateDay
+            timeRange <- validateTime
+            let timeSlot = (day, timeRange)
+            if hasTimeConflict timeSlot lessons
+                then do
+                    printError "Time slot conflicts with existing lesson."
+                    return db
+                else do
+                    venue <- getInput "Venue (optional): "
+                    lecturer <- getInput "Lecturer (optional): "
+                    let details = (venue, lecturer)
+                        newLessons = Map.insert timeSlot details lessons
+                        newDb = Map.adjust (Map.adjust (const newLessons) sName) tName db
+                    printSuccess "Lesson created successfully."
+                    return newDb
 
 -- Display a menu for user to select a lesson to edit, then prompt the user to choose which field to edit
-editLesson :: [Lesson] -> Timetable -> IO [Lesson]
-editLesson lessons timetable =
-    let lessonToString lesson = show (day lesson) <> " " <> show (time lesson)
-    in selectItem "Edit lesson" lessons lessonToString >>= \selectedLesson ->
-        case selectedLesson of
-            Nothing -> return lessons
-            Just idx -> 
-                let selectedLesson = lessons !! idx
-                in  printHeader (show (day selectedLesson) <> " " <> show (time selectedLesson)) >>
-                    putStrLn "1. Day" >>
-                    putStrLn "2. Time" >>
-                    putStrLn "3. Venue" >>
-                    putStrLn "4. Lecturer" >>
-                    putStrLn "5. Cancel" >>
-                    getInput "Select option: " >>= \choice ->
-                        case readMaybe choice of
-                            Just 1 ->
-                                printMessage ("Current day: " <> show (day selectedLesson)) >>
-                                validateDay >>= \newDay ->
-                                    let tempLesson = selectedLesson { day = newDay }
-                                    in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
-                                        case updatedLesson of
-                                            Nothing -> editLesson lessons timetable
-                                            Just updatedLesson ->
-                                                printSuccess "Lesson updated successfully." >>
-                                                return (replaceAt idx updatedLesson lessons)
-                            Just 2 ->
-                                printMessage ("Current time: " <> show (time selectedLesson)) >>
-                                validateTime >>= \newTime ->
-                                    let tempLesson = selectedLesson { time = newTime }
-                                    in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
-                                        case updatedLesson of
-                                            Nothing -> editLesson lessons timetable
-                                            Just updatedLesson ->
-                                                printSuccess "Lesson updated successfully." >>
-                                                return (replaceAt idx updatedLesson lessons)
-                            Just 3 ->
-                                printMessage ("Current venue: " <> venue selectedLesson) >>
-                                getInput "Enter new venue: " >>= \newVenue ->
-                                    printSuccess "Lesson updated successfully." >>
-                                    return (replaceAt idx (selectedLesson { venue = newVenue }) lessons)
-                            Just 4 ->
-                                printMessage ("Current lecturer: " <> lecturer selectedLesson) >>
-                                getInput "Enter new lecturer: " >>= \newLecturer ->
-                                    printSuccess "Lesson updated successfully." >>
-                                    return (replaceAt idx (selectedLesson { lecturer = newLecturer }) lessons)
-                            Just 5 -> return lessons
-                            _ -> printError "Invalid choice." >> editLesson lessons timetable
+editLesson :: String -> String -> TimeSlot -> TimetableDB -> IO TimetableDB
+editLesson tName sName oldTimeSlot db = do
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> do
+            printError "Timetable or subject not found."
+            return db
+        Just lessons -> case Map.lookup oldTimeSlot lessons of
+            Nothing -> do
+                printError "Lesson not found."
+                return db
+            Just (venue, lecturer) -> do
+                printHeader "Edit Lesson"
+                printMessage "Enter new details (press Enter to keep current value, '-' to clear):"
+                
+                -- Edit time slot
+                printMessage $ "Current day: " <> show (fst oldTimeSlot)
+                printMessage $ "Current time: " <> show (snd oldTimeSlot)
+                printMessage "Do you want to change the time slot? (y/n): "
+                changeTime <- getLine
+                
+                newTimeSlot <- if changeTime `elem` ["y", "Y", "yes", "Yes"]
+                    then do
+                        day <- validateDay
+                        timeRange <- validateTime
+                        let newSlot = (day, timeRange)
+                        -- Check if new time slot conflicts with other lessons
+                        if hasTimeConflict newSlot (Map.delete oldTimeSlot lessons)
+                            then do
+                                printError "This time slot conflicts with another lesson."
+                                return oldTimeSlot
+                            else return newSlot
+                    else return oldTimeSlot
+                
+                -- Edit venue and lecturer
+                newVenue <- getInput $ "Venue (current: " <> venue <> "): "
+                newLecturer <- getInput $ "Lecturer (current: " <> lecturer <> "): "
+                
+                let updatedDetails = 
+                        ( if null newVenue then venue 
+                          else if newVenue == "-" then "" 
+                          else newVenue
+                        , if null newLecturer then lecturer 
+                          else if newLecturer == "-" then "" 
+                          else newLecturer
+                        )
+                    
+                    -- If time slot changed, delete old and insert new
+                    newLessons = if oldTimeSlot /= newTimeSlot
+                                then Map.delete oldTimeSlot . Map.insert newTimeSlot updatedDetails $ lessons
+                                else Map.insert newTimeSlot updatedDetails lessons
+                                
+                    newDb = Map.adjust (Map.adjust (const newLessons) sName) tName db
+                
+                printSuccess "Lesson updated successfully."
+                return newDb
 
 -- Display a menu for user to select a lesson to delete
-deleteLesson :: [Lesson] -> IO [Lesson]
-deleteLesson lessons =
-    let lessonToString lesson = show (day lesson) <> " " <> show (time lesson)
-    in selectItem "Delete lesson" lessons lessonToString >>=
-    maybe (return lessons) (\idx ->
-        printSuccess "Lesson deleted successfully." >>
-        return (take idx lessons <> drop (idx + 1) lessons))
+deleteLesson :: String -> String -> TimeSlot -> TimetableDB -> IO TimetableDB
+deleteLesson tName sName timeSlot db = do
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> do
+            printError "Timetable or subject not found."
+            return db
+        Just lessons -> case Map.lookup timeSlot lessons of
+            Nothing -> do
+                printError "Lesson not found."
+                return db
+            Just _ -> do
+                confirmed <- confirmAction "Are you sure you want to delete this lesson?"
+                if confirmed
+                    then do
+                        let newLessons = Map.delete timeSlot lessons
+                            newDb = Map.adjust (Map.adjust (const newLessons) sName) tName db
+                        printSuccess "Lesson deleted successfully."
+                        return newDb
+                    else do
+                        printMessage "Deletion cancelled."
+                        return db
 
 -- Save timetables to json file
-saveTimetables :: TimetableDB -> IO ()
-saveTimetables ts = B.writeFile "timetables.json" (encode ts)
+saveTimetableDB :: TimetableDB -> IO ()
+saveTimetableDB timetableDB = B.writeFile "timetables.json" . encode $ timetableDB
 
 -- Load timetables from json file
-loadTimetables :: IO (Maybe TimetableDB)
-loadTimetables =
+loadTimetableDB :: IO TimetableDB
+loadTimetableDB =
     doesFileExist "timetables.json" >>= \fileExists ->
-        if fileExists then fmap decode (B.readFile "timetables.json") else return Nothing
+        if fileExists 
+            then fmap (fromMaybe Map.empty . decode) (B.readFile "timetables.json") 
+            else return Map.empty
+
+-- Get lesson time slot from user
+lessonMenu :: String -> String -> TimetableDB -> IO (Maybe TimeSlot)
+lessonMenu tName sName db = do
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> do
+            printError "Subject not found."
+            return Nothing
+        Just lessons -> do
+            displaySubjectLessons tName sName db
+            day <- validateDay
+            timeRange <- validateTime
+            let timeSlot = (day, timeRange)
+            return $ Just timeSlot
+
+displaySubjectLessons :: String -> String -> TimetableDB -> IO ()
+displaySubjectLessons tName sName db = do
+    case Map.lookup tName db >>= Map.lookup sName of
+        Nothing -> printError "Timetable or subject not found."
+        Just lessons -> do
+            printHeader $ tName <> " - " <> sName
+            if Map.null lessons
+                then printMessage "No lessons found."
+                else mapM_ displayLesson (Map.toList lessons)
+    where
+        displayLesson ((day, timeRange), (venue, lecturer)) = do
+            putStrLn $ "Day: " <> show day
+            putStrLn $ "Time: " <> show timeRange
+            putStrLn $ "Venue: " <> venue
+            putStrLn $ "Lecturer: " <> lecturer
+            putStrLn (replicate 40 '-')
+
+deleteTimetableMenu :: TimetableDB -> IO TimetableDB
+deleteTimetableMenu db = do
+    printHeader "Delete a Timetable"
+    mapM_ (\(name, _) -> putStrLn $ "- " <> name) (Map.toList db)
+    tName <- getInput "Enter timetable name to delete: "
+    deleteTimetable tName db

@@ -13,7 +13,7 @@ import Data.Aeson
 import GHC.Generics
 import Text.Read (readMaybe)
 
-data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving (Generic, FromJSON, ToJSON)
+data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving (Ord, Eq, Generic, FromJSON, ToJSON)
 
 instance Show TimeRange where
     show (TimeRange start end) = formatTime defaultTimeLocale "%I:%M%p" start <> " - " <> formatTime defaultTimeLocale "%I:%M%p" end
@@ -34,15 +34,15 @@ getInput :: String -> IO String
 getInput prompt = putStr "\n" >> putStr prompt >> hFlush stdout >> getLine
 
 -- Validate name to ensure it is not empty and does not already exist in the list
-validateName :: String -> [a] -> (a -> String) -> IO String
-validateName typeName list toString =
-    getInput (typeName <> " name: ") >>= \newName ->
-    if null newName then
-        printError "Name cannot be empty." >>
-        validateName typeName list toString
-    else if any (\x -> toString x == newName) list then
-        printError "Name already exists." >>
-        validateName typeName list toString
+validateName :: String -> Map.Map String a -> IO String
+validateName typeName existingMap = do
+    newName <- getInput (typeName <> " name: ")
+    if null newName then do
+        printError "Name cannot be empty."
+        validateName typeName existingMap
+    else if Map.member newName existingMap then do
+        printError "Name already exists."
+        validateName typeName existingMap
     else
         return newName
 
@@ -51,8 +51,7 @@ validateDay :: IO DayOfWeek
 validateDay =
     printMessage "Enter day (e.g. Monday, Tue)." >>
     getInput "Day: " >>= \input ->
-    let normalizedInput = map toLower input
-    in case Map.lookup normalizedInput dayMap of
+    case Map.lookup (map toLower input) dayMap of
         Just day -> return day
         Nothing -> printError "Invalid day." >> validateDay 
 
@@ -68,11 +67,14 @@ validateTime =
         Nothing ->
             printError "Invalid time format." >> validateTime
 
+parseTimeRange :: String -> Maybe TimeRange
+parseTimeRange time =
+    let (start, end) = break (== '-') time
+    in TimeRange <$> parseTime start <*> parseTime (tail end)
+
 -- Check if end time is after start time
 isValidTimeOrder :: TimeRange -> Bool
-isValidTimeOrder (TimeRange start end) =
-    timeToMinutes start < timeToMinutes end 
-    where timeToMinutes t = todHour t * 60 + todMin t
+isValidTimeOrder (TimeRange start end) = timeToMinutes start < timeToMinutes end 
 
 -- Parse a time string into TimeOfDay
 parseTime :: String -> Maybe TimeOfDay
@@ -85,34 +87,22 @@ parseTime timeString =
 parseWithFormat :: String -> String -> Maybe TimeOfDay
 parseWithFormat format timeString = parseTimeM True defaultTimeLocale format timeString
 
--- Parse TimeRange string into TimeRange data structure
-parseTimeRange :: String -> Maybe TimeRange
-parseTimeRange time =
-    let (start, end) = break (== '-') time
-    in liftM2 TimeRange (parseTime start) (parseTime (tail end))
-
 -- Check if two time ranges overlap
 isOverlap :: TimeRange -> TimeRange -> Bool
-isOverlap (TimeRange start1 end1) (TimeRange start2 end2) =
-        timeToMinutes start1 < timeToMinutes end2 && timeToMinutes start2 < timeToMinutes end1
-    where
-        timeToMinutes t = todHour t * 60 + todMin t
-
--- Replace an element in a list at a given index
-replaceAt :: Int -> a -> [a] -> [a]
-replaceAt _ _ [] = []
-replaceAt 0 newVal (_:xs) = newVal : xs
-replaceAt n newVal (x:xs) = x : replaceAt (n - 1) newVal xs
+isOverlap (TimeRange start1 end1) (TimeRange start2 end2) = timeToMinutes start1 < timeToMinutes end2 && timeToMinutes start2 < timeToMinutes end1
+        
+timeToMinutes :: TimeOfDay -> Int
+timeToMinutes t = todHour t * 60 + todMin t
 
 -- Select an item (either subject or timetable)
-selectItem :: String -> [a] -> (a -> String) -> IO (Maybe Int)
-selectItem header items name =
+selectItem :: String -> [String]-> IO (Maybe Int)
+selectItem header items =
     printHeader header >>
-    mapM_ (\(i, item) -> putStrLn $ show i <> ". " <> name item) (zip [1..] items) >>
+    mapM_ (\(i, item) -> putStrLn $ show i <> ". " <> item) (zip [1..] items) >>
     printExit >>
     getInput "Select option: " >>= \choice ->
     case choice of
         "" -> return Nothing
-        _  -> case readMaybe choice of
-            Just n | n >= 1 && n <= length items -> return (Just (n - 1))
-            _ -> printError "Invalid choice." >> selectItem header items name
+        n  -> case reads n of
+            [(num, "")] | num > 0 && num <= length items -> return $ Just (num - 1)
+            _ -> printError "Invalid choice." >> selectItem header items

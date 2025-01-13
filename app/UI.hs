@@ -37,3 +37,9 @@ printSuccess message = setSGR [SetColor Foreground Dull Green] >> putStrLn ("\n"
 -- Clear screen
 clearScreen :: IO ()
 clearScreen = putStr "\ESC[2J"
+
+confirmAction :: String -> IO Bool
+confirmAction message = do
+    printMessage $ message <> " (y/n): "
+    response <- getLine
+    return $ response `elem` ["y", "Y", "yes", "Yes"]
