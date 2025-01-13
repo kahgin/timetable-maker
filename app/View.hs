@@ -26,7 +26,7 @@ groupByDay timetable =
     insertLesson acc (day, lessonInfo) = Map.alter (Just . maybe [lessonInfo] (lessonInfo :)) day acc
 
 -- Display a menu for user to select a timetable to view
-viewTimetable :: TimetableList -> IO ()
+viewTimetable :: TimetableDB -> IO ()
 viewTimetable timetables =
     selectItem "Print a Timetable" timetables timetableName >>= \idx ->
     case idx of

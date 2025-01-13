@@ -7,7 +7,7 @@ import View
 import Data.Maybe
 
 -- Main menu
-mainMenu :: TimetableList -> IO ()
+mainMenu :: TimetableDB -> IO ()
 mainMenu timetables =
     printHeader "Welcome to Timetable Creator!" >>
     putStrLn "1. Create a new timetable" >>
@@ -20,8 +20,8 @@ mainMenu timetables =
     case choice of
         "1" ->
             createTimetable timetables >>= \newTimetable ->
-            let newTimetableList = timetables <> [newTimetable]
-            in saveTimetables newTimetableList >> mainMenu newTimetableList
+            let newTimetableDB = timetables <> [newTimetable]
+            in saveTimetables newTimetableDB >> mainMenu newTimetableDB
         "2" ->
             if not (null timetables) then
                 editTimetable timetables >>= \updatedTimetables ->

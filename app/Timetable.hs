@@ -15,12 +15,33 @@ import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
 import Data.List (findIndex)
 
-type TimetableList = [Timetable]
+-- APA citation:
+
+-- OpenAI. (2025). ChatGPT [Large language model]. OpenAI. https://www.openai.com
+-- Anthropic. (2025). Claude [AI language model]. Anthropic. https://www.anthropic.com
+
+type TimetableDB = [Timetable]
 
 data Timetable = Timetable {
     timetableName :: String,
     subjects :: [Subject]
     } deriving (Show, Generic, FromJSON, ToJSON)
+
+instance Semigroup Timetable where
+    (<>) a b = Timetable { 
+        timetableName = timetableName a,
+        subjects = concatMap (appendSubjects (subjects b)) (subjects a)
+        }
+        where
+            appendSubjects :: [Subject] -> Subject -> [Subject]
+            appendSubjects [] subject = [subject]
+            appendSubjects (x:xs) subject
+                | subjectName x == subjectName subject = [subject { lessons = lessons x <> lessons subject }] <> xs
+                | otherwise = x : appendSubjects xs subject
+
+instance Monoid Timetable where
+    mempty = Timetable { timetableName = "", subjects = [] }
+    mappend a b = a <> b
 
 data Subject = Subject { 
     subjectName :: String,
@@ -35,15 +56,15 @@ data Lesson = Lesson {
     } deriving (Show, Generic, FromJSON, ToJSON)
 
 -- Create a new timetable
-createTimetable :: TimetableList -> IO Timetable
+createTimetable :: TimetableDB -> IO Timetable
 createTimetable timetables =
     printHeader "Create a new Timetable" >>
     validateName "Timetable" (map timetableName timetables) id >>= \timetableName ->
-    let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
-    in printSuccess "Timetable created successfully." >> manageTimetable newTimetable timetables
+        let newTimetable = Timetable { timetableName = timetableName, subjects = [] }
+        in printSuccess "Timetable created successfully." >> manageTimetable newTimetable timetables
 
 -- Display a menu for user to either edit timetable name or manage subjects (add, edit, delete) in the timetable
-manageTimetable :: Timetable -> TimetableList -> IO Timetable
+manageTimetable :: Timetable -> TimetableDB -> IO Timetable
 manageTimetable timetable timetables =
     printHeader (timetableName timetable) >>
     unless (null $ subjects timetable) (displaySubjectsWithLessons (subjects timetable)) >>
@@ -53,37 +74,37 @@ manageTimetable timetable timetables =
     putStrLn "4. Delete a subject" >>
     printExit >>
     getInput "Select option (1-4): " >>= \choice ->
-    case choice of
-        "1" ->
-            printHeader "Edit Timetable Name" >>
-            validateName "Timetable" (map timetableName timetables) id >>= \newName ->
-            let updatedTimetable = timetable { timetableName = newName }
-            in manageTimetable (timetable { timetableName = newName }) timetables
-        "2" ->
-            createSubject timetable >>= \newSubject ->
-            let updatedTimetable = timetable { subjects = subjects timetable <> [newSubject] }
-            in manageTimetable (timetable { subjects = subjects timetable <> [newSubject] }) timetables
-        "3" ->
-            if null (subjects timetable) then
-                printError "No subjects available." >>
-                manageTimetable timetable timetables
-            else
-                editSubject timetable >>= \updatedSubjects ->
-                let updatedTimetable = timetable { subjects = updatedSubjects }
-                in manageTimetable (timetable { subjects = updatedSubjects }) timetables
-        "4" ->
-            if null (subjects timetable) then
-                printError "No subjects available." >>
-                manageTimetable timetable timetables
-            else
-                deleteSubject (subjects timetable) >>= \updatedSubjects ->
-                let updatedTimetable = timetable { subjects = updatedSubjects }
-                in manageTimetable (timetable { subjects = updatedSubjects }) timetables
-        ""  -> saveTimetables (updateTimetableInList timetable timetables) >> return timetable
-        _   -> printError "Invalid choice!" >> manageTimetable timetable timetables
+        case choice of
+            "1" ->
+                printHeader "Edit Timetable Name" >>
+                validateName "Timetable" (map timetableName timetables) id >>= \newName ->
+                    let updatedTimetable = timetable { timetableName = newName }
+                    in manageTimetable (timetable { timetableName = newName }) timetables
+            "2" ->
+                createSubject timetable >>= \newSubject ->
+                    let updatedTimetable = timetable { subjects = subjects timetable <> [newSubject] }
+                    in manageTimetable (timetable { subjects = subjects timetable <> [newSubject] }) timetables
+            "3" ->
+                if null (subjects timetable) then
+                    printError "No subjects available." >>
+                    manageTimetable timetable timetables
+                else
+                    editSubject timetable >>= \updatedSubjects ->
+                        let updatedTimetable = timetable { subjects = updatedSubjects }
+                        in manageTimetable (timetable { subjects = updatedSubjects }) timetables
+            "4" ->
+                if null (subjects timetable) then
+                    printError "No subjects available." >>
+                    manageTimetable timetable timetables
+                else
+                    deleteSubject (subjects timetable) >>= \updatedSubjects ->
+                        let updatedTimetable = timetable { subjects = updatedSubjects }
+                        in manageTimetable (timetable { subjects = updatedSubjects }) timetables
+            ""  -> saveTimetables (updateTimetableInList timetable timetables) >> return timetable
+            _   -> printError "Invalid choice!" >> manageTimetable timetable timetables
 
 -- Update the list of timetables with the updated timetable
-updateTimetableInList :: Timetable -> TimetableList -> TimetableList
+updateTimetableInList :: Timetable -> TimetableDB -> TimetableDB
 updateTimetableInList updatedTimetable [] = [updatedTimetable]
 updateTimetableInList updatedTimetable timetables = 
     case findIndex (\t -> timetableName t == timetableName updatedTimetable) timetables of
@@ -91,24 +112,24 @@ updateTimetableInList updatedTimetable timetables =
         Nothing -> timetables <> [updatedTimetable]
         
 -- Display a menu for user to select a timetable to edit
-editTimetable :: TimetableList -> IO TimetableList
+editTimetable :: TimetableDB -> IO TimetableDB
 editTimetable timetables =
     selectItem "Edit a Timetable" timetables timetableName >>= \idx ->
-    case idx of
-        Nothing -> return timetables
-        Just idx ->
-            manageTimetable (timetables !! idx) timetables >>= \updatedTimetable ->
-            return $ replaceAt idx updatedTimetable timetables
+        case idx of
+            Nothing -> return timetables
+            Just idx ->
+                manageTimetable (timetables !! idx) timetables >>= \updatedTimetable ->
+                    return $ replaceAt idx updatedTimetable timetables
 
 -- Display a menu for user to select a timetable to delete
-deleteTimetable :: TimetableList -> IO TimetableList
+deleteTimetable :: TimetableDB -> IO TimetableDB
 deleteTimetable timetables =
     selectItem "Delete a Timetable" timetables timetableName >>= \idx ->
-    case idx of
-        Nothing -> return timetables
-        Just idx ->
-            let updatedTimetables = take idx timetables <> drop (idx + 1) timetables
-            in printSuccess "Timetable deleted successfully." >> return updatedTimetables
+        case idx of
+            Nothing -> return timetables
+            Just idx ->
+                let updatedTimetables = take idx timetables <> drop (idx + 1) timetables
+                in printSuccess "Timetable deleted successfully." >> return updatedTimetables
             
 -- Display all subjects with their corresponding lessons in a timetable
 displaySubjectsWithLessons :: [Subject] -> IO ()
@@ -174,41 +195,35 @@ manageSubject subject timetable =
             "" -> return subject
 
             _ -> printError "Invalid choice!" >> manageSubject subject timetable
-
     where
         -- Update the subject in the timetable
         updateSubjectInTimetable :: Subject -> Timetable -> IO Subject
         updateSubjectInTimetable updatedSubject currentTimetable = 
-            let updatedSubjects = replaceSubjectInList updatedSubject (subjects currentTimetable)
+            let updatedSubjects = zipWith (\oldSubject index -> if subjectName oldSubject == subjectName updatedSubject then updatedSubject else oldSubject) (subjects currentTimetable) [0..]
                 updatedTimetable = currentTimetable { subjects = updatedSubjects }
             in manageSubject updatedSubject updatedTimetable
-
-        -- Replace a subject in a list of subjects
-        replaceSubjectInList :: Subject -> [Subject] -> [Subject]
-        replaceSubjectInList newSubject subjects = 
-            zipWith (\oldSubject index -> if subjectName oldSubject == subjectName newSubject then newSubject else oldSubject) subjects [0..]
 
 -- Display a menu for user to select a subject to edit
 editSubject :: Timetable -> IO [Subject]
 editSubject timetable =
     let subjectList = subjects timetable
     in selectItem "Edit subject" subjectList subjectName >>= \selectedIdx ->
-    case selectedIdx of
-        Nothing -> return subjectList
-        Just idx ->
-            manageSubject (subjectList !! idx) timetable >>= \updatedSubject ->
-            let updatedSubjects = replaceAt idx updatedSubject subjectList
-            in return updatedSubjects
+        case selectedIdx of
+            Nothing -> return subjectList
+            Just idx ->
+                manageSubject (subjectList !! idx) timetable >>= \updatedSubject ->
+                    let updatedSubjects = replaceAt idx updatedSubject subjectList
+                    in return updatedSubjects
 
 -- Display a menu for user to select a subject to delete
 deleteSubject :: [Subject] -> IO [Subject]
 deleteSubject subjects =
     selectItem "Delete subject" subjects subjectName >>= \selectedIdx ->
-    case selectedIdx of
-        Nothing -> return subjects
-        Just idx ->
-            printSuccess "Subject deleted successfully." >>
-            return (take idx subjects <> drop (idx + 1) subjects)
+        case selectedIdx of
+            Nothing -> return subjects
+            Just idx ->
+                printSuccess "Subject deleted successfully." >>
+                return (take idx subjects <> drop (idx + 1) subjects)
 
 -- Display all lessons of a subject
 displayLessons :: [Lesson] -> IO ()
@@ -232,16 +247,16 @@ createLesson :: [Lesson] -> Timetable -> IO [Lesson]
 createLesson lessons timetable =
     printHeader "Add a Lesson" >>
     validateDay >>= \day ->
-    validateTime >>= \time ->
-    let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
-    in handleOverlapLesson newLesson timetable >>= \overlappingLesson ->
-    case overlappingLesson of
-        Nothing -> return lessons
-        Just lesson ->
-            getInput "Venue (optional): " >>= \venue ->
-            getInput "Lecturer (optional): " >>= \lecturer ->
-            printSuccess "Lesson added successfully." >>
-            return (lessons <> [lesson { venue = venue, lecturer = lecturer }])
+        validateTime >>= \time ->
+            let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
+            in handleOverlapLesson newLesson timetable >>= \overlappingLesson ->
+                case overlappingLesson of
+                    Nothing -> return lessons
+                    Just lesson ->
+                        getInput "Venue (optional): " >>= \venue ->
+                            getInput "Lecturer (optional): " >>= \lecturer ->
+                                printSuccess "Lesson added successfully." >>
+                                return (lessons <> [lesson { venue = venue, lecturer = lecturer }])
 
 -- Check if overlapping lesson exist and return the subject name and the lesson if found
 checkOverlappingLesson :: Lesson -> Timetable -> Maybe (Subject, Lesson)
@@ -258,64 +273,64 @@ handleOverlapLesson newLesson timetable =
             putStrLn "1. Re-enter day & time" >>
             putStrLn "2. Stop adding / editing" >>
             getInput "Select option: " >>= \choice ->
-            case choice of
-                "1" -> 
-                    validateDay >>= \day ->
-                    validateTime >>= \time ->
-                    let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
-                    in handleOverlapLesson newLesson timetable
-                "2" -> return Nothing
-                _   -> printError "Invalid choice." >> handleOverlapLesson newLesson timetable
+                case choice of
+                    "1" -> 
+                        validateDay >>= \day ->
+                            validateTime >>= \time ->
+                                let newLesson = Lesson { day = day, time = time, venue = "", lecturer = "" }
+                                in handleOverlapLesson newLesson timetable
+                    "2" -> return Nothing
+                    _   -> printError "Invalid choice." >> handleOverlapLesson newLesson timetable
 
 -- Display a menu for user to select a lesson to edit, then prompt the user to choose which field to edit
 editLesson :: [Lesson] -> Timetable -> IO [Lesson]
 editLesson lessons timetable =
     let lessonToString lesson = show (day lesson) <> " " <> show (time lesson)
     in selectItem "Edit lesson" lessons lessonToString >>= \selectedLesson ->
-    case selectedLesson of
-        Nothing -> return lessons
-        Just idx -> 
-            let selectedLesson = lessons !! idx
-            in  printHeader (show (day selectedLesson) <> " " <> show (time selectedLesson)) >>
-                putStrLn "1. Day" >>
-                putStrLn "2. Time" >>
-                putStrLn "3. Venue" >>
-                putStrLn "4. Lecturer" >>
-                putStrLn "5. Cancel" >>
-                getInput "Select option: " >>= \choice ->
-                case readMaybe choice of
-                    Just 1 ->
-                        printMessage ("Current day: " <> show (day selectedLesson)) >>
-                        validateDay >>= \newDay ->
-                        let tempLesson = selectedLesson { day = newDay }
-                        in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
-                        case updatedLesson of
-                            Nothing -> editLesson lessons timetable
-                            Just updatedLesson ->
-                                printSuccess "Lesson updated successfully." >>
-                                return (replaceAt idx updatedLesson lessons)
-                    Just 2 ->
-                        printMessage ("Current time: " <> show (time selectedLesson)) >>
-                        validateTime >>= \newTime ->
-                        let tempLesson = selectedLesson { time = newTime }
-                        in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
-                        case updatedLesson of
-                            Nothing -> editLesson lessons timetable
-                            Just updatedLesson ->
-                                printSuccess "Lesson updated successfully." >>
-                                return (replaceAt idx updatedLesson lessons)
-                    Just 3 ->
-                        printMessage ("Current venue: " <> venue selectedLesson) >>
-                        getInput "Enter new venue: " >>= \newVenue ->
-                        printSuccess "Lesson updated successfully." >>
-                        return (replaceAt idx (selectedLesson { venue = newVenue }) lessons)
-                    Just 4 ->
-                        printMessage ("Current lecturer: " <> lecturer selectedLesson) >>
-                        getInput "Enter new lecturer: " >>= \newLecturer ->
-                        printSuccess "Lesson updated successfully." >>
-                        return (replaceAt idx (selectedLesson { lecturer = newLecturer }) lessons)
-                    Just 5 -> return lessons
-                    _ -> printError "Invalid choice." >> editLesson lessons timetable
+        case selectedLesson of
+            Nothing -> return lessons
+            Just idx -> 
+                let selectedLesson = lessons !! idx
+                in  printHeader (show (day selectedLesson) <> " " <> show (time selectedLesson)) >>
+                    putStrLn "1. Day" >>
+                    putStrLn "2. Time" >>
+                    putStrLn "3. Venue" >>
+                    putStrLn "4. Lecturer" >>
+                    putStrLn "5. Cancel" >>
+                    getInput "Select option: " >>= \choice ->
+                        case readMaybe choice of
+                            Just 1 ->
+                                printMessage ("Current day: " <> show (day selectedLesson)) >>
+                                validateDay >>= \newDay ->
+                                    let tempLesson = selectedLesson { day = newDay }
+                                    in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
+                                        case updatedLesson of
+                                            Nothing -> editLesson lessons timetable
+                                            Just updatedLesson ->
+                                                printSuccess "Lesson updated successfully." >>
+                                                return (replaceAt idx updatedLesson lessons)
+                            Just 2 ->
+                                printMessage ("Current time: " <> show (time selectedLesson)) >>
+                                validateTime >>= \newTime ->
+                                    let tempLesson = selectedLesson { time = newTime }
+                                    in handleOverlapLesson tempLesson timetable >>= \updatedLesson ->
+                                        case updatedLesson of
+                                            Nothing -> editLesson lessons timetable
+                                            Just updatedLesson ->
+                                                printSuccess "Lesson updated successfully." >>
+                                                return (replaceAt idx updatedLesson lessons)
+                            Just 3 ->
+                                printMessage ("Current venue: " <> venue selectedLesson) >>
+                                getInput "Enter new venue: " >>= \newVenue ->
+                                    printSuccess "Lesson updated successfully." >>
+                                    return (replaceAt idx (selectedLesson { venue = newVenue }) lessons)
+                            Just 4 ->
+                                printMessage ("Current lecturer: " <> lecturer selectedLesson) >>
+                                getInput "Enter new lecturer: " >>= \newLecturer ->
+                                    printSuccess "Lesson updated successfully." >>
+                                    return (replaceAt idx (selectedLesson { lecturer = newLecturer }) lessons)
+                            Just 5 -> return lessons
+                            _ -> printError "Invalid choice." >> editLesson lessons timetable
 
 -- Display a menu for user to select a lesson to delete
 deleteLesson :: [Lesson] -> IO [Lesson]
@@ -327,14 +342,11 @@ deleteLesson lessons =
         return (take idx lessons <> drop (idx + 1) lessons))
 
 -- Save timetables to json file
-saveTimetables :: TimetableList -> IO ()
+saveTimetables :: TimetableDB -> IO ()
 saveTimetables ts = B.writeFile "timetables.json" (encode ts)
 
 -- Load timetables from json file
-loadTimetables :: IO (Maybe TimetableList)
+loadTimetables :: IO (Maybe TimetableDB)
 loadTimetables =
     doesFileExist "timetables.json" >>= \fileExists ->
-    if fileExists
-        then
-            fmap decode (B.readFile "timetables.json")
-        else return Nothing
+        if fileExists then fmap decode (B.readFile "timetables.json") else return Nothing
