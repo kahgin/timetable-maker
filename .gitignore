@@ -1,2 +1,5 @@
 # Ignore build directories
 dist-newstyle/
+
+# Ignore local JSON files
+timetables.json

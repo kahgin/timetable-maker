@@ -2,14 +2,11 @@ module View where
 
 import Timetable
 import UI
-import Helper
-import Data.Maybe
+import Utility
 import qualified Data.Map as Map
 import Data.Time
-import Data.List (foldl')
 import Control.Monad (forM_)
 import Data.Char (toUpper)
-import Debug.Trace
 
 columnWidth :: Int
 columnWidth = 15
@@ -86,7 +83,7 @@ formatTimeOfDay time =
 
 printDayRow :: [String] -> DayOfWeek -> [(String, TimeSlot, LessonDetails)] -> IO ()
 printDayRow timeSlots day lessons = do
-    let subjectLines = map (formatTimeSlotContent timeSlots lessons) timeSlots
+    let subjectLines = map (formatTimeSlotContent lessons) timeSlots
         maxLines = maximum $ map length subjectLines
         
     forM_ [0..(maxLines-1)] $ \lineNum -> do
@@ -100,8 +97,8 @@ printDayRow timeSlots day lessons = do
                                              else "") <> "|"
         putStrLn ""
 
-formatTimeSlotContent :: [String] -> [(String, TimeSlot, LessonDetails)] -> String -> [String]
-formatTimeSlotContent timeSlots lessons slot =
+formatTimeSlotContent :: [(String, TimeSlot, LessonDetails)] -> String -> [String]
+formatTimeSlotContent lessons slot =
     case findLessonInTimeSlot slot lessons of
         Nothing -> [""]
         Just (subject, _, (venue, lecturer)) ->

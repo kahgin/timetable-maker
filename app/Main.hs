@@ -1,7 +1,7 @@
 module Main where
 
 import UI
-import Helper
+import Utility
 import Timetable
 import View
 import qualified Data.Map as Map

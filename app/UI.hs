@@ -19,20 +19,30 @@ printHeader header =
 -- Print error message
 printError :: String -> IO()
 printError message =
-    setSGR [SetColor Foreground Dull Red] >> putStrLn message >> setSGR [Reset]
+    setSGR [SetColor Foreground Dull Red] >> 
+    putStrLn message >> 
+    setSGR [Reset]
 
 -- Print example message
 printMessage :: String -> IO ()
 printMessage message =
-    setSGR [SetColor Foreground Dull Cyan] >> putStrLn message >> setSGR [Reset]
+    setSGR [SetColor Foreground Dull Cyan] >> 
+    putStrLn message >> 
+    setSGR [Reset]
 
 -- Print exit instruction
 printExit :: IO ()
-printExit = setSGR [SetColor Foreground Dull Blue] >> putStrLn "Press [Enter] to exit." >> setSGR [Reset]
+printExit = 
+    setSGR [SetColor Foreground Dull Blue] >> 
+    putStrLn "Press [Enter] to exit." >> 
+    setSGR [Reset]
 
 -- Print success message
 printSuccess :: String -> IO ()
-printSuccess message = setSGR [SetColor Foreground Dull Green] >> putStrLn ("\n" <> message) >> setSGR [Reset]
+printSuccess message = 
+    setSGR [SetColor Foreground Dull Green] >> 
+    putStrLn ("\n" <> message) >> 
+    setSGR [Reset]
 
 -- Clear screen
 clearScreen :: IO ()

@@ -1,17 +1,16 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveAnyClass #-}
 
-module Helper where
+module Utility where
 
 import UI
 import System.IO (hFlush, stdout)
 import Data.Char (toLower)
 import Data.Time
-import Control.Monad (mplus, liftM2)
+import Control.Monad (mplus)
 import qualified Data.Map as Map
 import Data.Aeson
 import GHC.Generics
-import Text.Read (readMaybe)
 
 data TimeRange = TimeRange { startTime :: TimeOfDay, endTime :: TimeOfDay } deriving (Ord, Eq, Generic, FromJSON, ToJSON)
 
@@ -40,7 +39,7 @@ validateName typeName existingMap = do
     if null newName then do
         printError "Name cannot be empty."
         validateName typeName existingMap
-    else if Map.member newName existingMap then do
+    else if Map.member (map toLower newName) existingMap then do
         printError "Name already exists."
         validateName typeName existingMap
     else
