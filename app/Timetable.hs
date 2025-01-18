@@ -35,11 +35,10 @@ manageTimetableMenu tName db = do
     case Map.lookup tName db of
         Just subjects -> 
             unless (Map.null subjects) $ do
-                putStrLn "\nCurrent Subjects and Lessons:"
                 forM_ (Map.toList subjects) $ \(sName, lessons) -> do
-                    putStrLn $ "\nSubject: " <> sName
+                    putStrLn $ "Subject: " <> sName
                     if Map.null lessons
-                        then printMessage "No lessons available.\n"
+                        then printMessage "\nNo lessons available.\n"
                         else displayLessons lessons
         Nothing -> putStr ""
 
@@ -47,6 +46,7 @@ manageTimetableMenu tName db = do
     putStrLn "2. Add a subject"
     putStrLn "3. Edit a subject"
     putStrLn "4. Delete a subject"
+    printExit
     
     choice <- getInput "Select option (1-4): "
     case choice of
@@ -175,7 +175,7 @@ manageSubjectMenu tName sName db = do
     printHeader sName
 
     case Map.lookup tName db >>= Map.lookup sName of
-        Just lessons -> displayLessons lessons
+        Just lessons -> unless (Map.null lessons) $ displayLessons lessons
         Nothing -> putStr ""
 
     putStrLn "1. Edit subject name"
@@ -311,6 +311,7 @@ deleteSubject tName sName db = do
                     else do
                         printMessage "Deletion cancelled."
                         return db
+
 createLesson :: String -> String -> TimetableDB -> IO TimetableDB
 createLesson tName sName db = do
     case Map.lookup tName db of
@@ -322,9 +323,9 @@ createLesson tName sName db = do
             day <- validateDay
             timeRange <- validateTime
             let timeSlot = (day, timeRange)
-            if hasTimeConflict timeSlot subjects
-                then do
-                    printError "Time slot conflicts with existing lesson in another subject."
+            case findTimeConflict timeSlot subjects of
+                Just (conflictSubject, (conflictDay, conflictTime)) -> do
+                    printError $ "Time slot conflicts with existing lesson in " <> conflictSubject <> " at " <> show conflictDay <> " " <> show conflictTime
                     printMessage "Would you like to:"
                     putStrLn "1. Try a different time"
                     putStrLn "2. Cancel adding lesson"
@@ -332,7 +333,7 @@ createLesson tName sName db = do
                     case choice of
                         "1" -> createLesson tName sName db
                         _   -> return db
-                else do
+                Nothing -> do
                     venue <- getInput "Venue (optional): "
                     lecturer <- getInput "Lecturer (optional): "
                     let details = (venue, lecturer)
@@ -372,10 +373,10 @@ editLesson tName sName oldTimeSlot db = do
                             let newSlot = (day, timeRange)
                                 subjects = fromJust $ Map.lookup tName db
                                 lessonsWithoutCurrent = Map.adjust (Map.delete oldTimeSlot) sName subjects
-                            if hasTimeConflict newSlot lessonsWithoutCurrent
-                                then do
-                                    printError "This time slot conflicts with another lesson."
-                                    printMessage "Would you like to:"
+                            case findTimeConflict newSlot lessonsWithoutCurrent of
+                                Just (conflictSubject, (_, conflictTime)) -> do
+                                    printError $ "This time slot conflicts with existing lesson in " <> conflictSubject <> " at " <> show conflictTime
+                                    printMessage "\nWould you like to:"
                                     putStrLn "1. Try a different time"
                                     putStrLn "2. Keep current time"
                                     choice <- getInput "Select option (1-2): "
@@ -386,7 +387,7 @@ editLesson tName sName oldTimeSlot db = do
                                                 Just newSlot' -> return newSlot'
                                                 Nothing -> return oldTimeSlot
                                         else return oldTimeSlot
-                                else return newSlot
+                                Nothing -> return newSlot
                         else return oldTimeSlot
                 
                 -- Edit venue and lecturer
@@ -411,7 +412,15 @@ editLesson tName sName oldTimeSlot db = do
                 
                 printSuccess "Lesson updated successfully."
                 return newDb
-                
+
+-- Check for time conflicts across all subjects
+findTimeConflict :: TimeSlot -> SubjectMap -> Maybe (String, TimeSlot)
+findTimeConflict (day, timeRange) subjects =
+    let conflicts = [(sName, (d, tr)) | (sName, lessons) <- Map.toList subjects, (timeSlot@(d, tr), _) <- Map.toList lessons, d == day && isOverlap timeRange tr]
+    in case conflicts of
+        [] -> Nothing
+        (conflict:_) -> Just conflict
+
 -- Display a menu for user to select a lesson to delete
 deleteLesson :: String -> String -> TimeSlot -> TimetableDB -> IO TimetableDB
 deleteLesson tName sName timeSlot db = do
@@ -440,14 +449,6 @@ getAllLessonsForDay day subjects =
     Map.unionsWith (\_ b -> b) 
         [Map.filterWithKey (\(d, _) _ -> d == day) lessons 
          | (_, lessons) <- Map.toList subjects]
-
--- Check for time conflicts across all subjects
-hasTimeConflict :: TimeSlot -> SubjectMap -> Bool
-hasTimeConflict (day, timeRange) subjects =
-    let dayLessons = getAllLessonsForDay day subjects
-    in not $ null $ Map.filterWithKey isConflicting dayLessons
-    where
-        isConflicting (_, tr) _ = isOverlap timeRange tr
 
 -- Save timetables to json file
 saveTimetableDB :: TimetableDB -> IO ()

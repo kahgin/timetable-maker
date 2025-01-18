@@ -14,6 +14,7 @@ printHeader header =
         putStrLn line >>
         putStrLn (replicate padding ' ' <> header <> replicate padding ' ') >>
         putStrLn line >>
+        putStrLn "" >>
         setSGR [Reset]
 
 -- Print error message
@@ -48,8 +49,4 @@ printSuccess message =
 clearScreen :: IO ()
 clearScreen = putStr "\ESC[2J"
 
-confirmAction :: String -> IO Bool
-confirmAction message = do
-    printMessage $ message <> " (y/n): "
-    response <- getLine
-    return $ response `elem` ["y", "Y", "yes", "Yes"]
+

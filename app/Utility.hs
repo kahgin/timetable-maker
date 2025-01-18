@@ -32,6 +32,13 @@ dayMap = Map.fromList
 getInput :: String -> IO String
 getInput prompt = putStr "\n" >> putStr prompt >> hFlush stdout >> getLine
 
+-- Confirm an action with a message
+confirmAction :: String -> IO Bool
+confirmAction message = do
+    printMessage $ message <> " (y/n): "
+    response <- getLine
+    return $ response `elem` ["y", "Y", "yes", "Yes"]
+
 -- Validate name to ensure it is not empty and does not already exist in the list
 validateName :: String -> Map.Map String a -> IO String
 validateName typeName existingMap = do
@@ -75,16 +82,12 @@ parseTimeRange time =
 isValidTimeOrder :: TimeRange -> Bool
 isValidTimeOrder (TimeRange start end) = timeToMinutes start < timeToMinutes end 
 
--- Parse a time string into TimeOfDay
+-- Parse a time string into TimeOfDay with a given format
 parseTime :: String -> Maybe TimeOfDay
 parseTime timeString =
-    parseWithFormat "%l:%M%p" timeString `mplus` -- 9:00am
-    parseWithFormat "%l.%M%p" timeString `mplus` -- 9.00am
-    parseWithFormat "%l%p" timeString            -- 9am
-
--- Parse time string into TimeOfDay with a given format
-parseWithFormat :: String -> String -> Maybe TimeOfDay
-parseWithFormat format timeString = parseTimeM True defaultTimeLocale format timeString
+    parseTimeM True defaultTimeLocale "%l:%M%p" timeString `mplus` -- 9:00am
+    parseTimeM True defaultTimeLocale "%l.%M%p" timeString `mplus` -- 9.00am
+    parseTimeM True defaultTimeLocale "%l%p" timeString            -- 9am
 
 -- Check if two time ranges overlap
 isOverlap :: TimeRange -> TimeRange -> Bool
