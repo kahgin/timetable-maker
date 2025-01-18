@@ -46,7 +46,7 @@ validateName typeName existingMap = do
     if null newName then do
         printError "Name cannot be empty."
         validateName typeName existingMap
-    else if Map.member (map toLower newName) existingMap then do
+    else if any (\existingName -> map toLower existingName == map toLower newName) (Map.keys existingMap) then do
         printError "Name already exists."
         validateName typeName existingMap
     else
@@ -108,3 +108,14 @@ selectItem header items =
         n  -> case reads n of
             [(num, "")] | num > 0 && num <= length items -> return $ Just (num - 1)
             _ -> printError "Invalid choice." >> selectItem header items
+
+-- Pad a string to the right
+padRight :: Int -> String -> String
+padRight width str =
+    let truncated = if length str > width then take width str else str
+    in truncated <> replicate (width - length truncated) ' '
+
+-- Split a list into groups of n elements
+groupsOf :: Int -> [a] -> [[a]]
+groupsOf _ [] = []
+groupsOf n xs = take n xs : groupsOf n (drop n xs)

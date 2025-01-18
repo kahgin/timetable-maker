@@ -111,9 +111,4 @@ findLessonInTimeSlot timeStr lessons =
     in case filter containsTime lessons of
            (lesson:_) -> Just lesson
            [] -> Nothing
-
-padRight :: Int -> String -> String
-padRight width str =
-    let truncated = if length str > width then take width str else str
-    in truncated <> replicate (width - length truncated) ' '
     

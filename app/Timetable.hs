@@ -7,7 +7,7 @@ import UI
 import Utility
 import Data.Time (DayOfWeek(..))
 import Data.Aeson (encode, decode)
-import Control.Monad (forM_, unless, when)
+import Control.Monad (forM_, unless)
 import System.Directory (doesFileExist)
 import qualified Data.ByteString.Lazy as B
 import qualified Data.Map as Map
@@ -19,7 +19,7 @@ type LessonMap = Map.Map TimeSlot LessonDetails     -- (day,time) -> details
 type TimeSlot = (DayOfWeek, TimeRange) 
 type LessonDetails = (String, String)               -- (venue, lecturer)
 
--- Create a new timetable interactively
+-- Create a new timetable
 createTimetable :: TimetableDB -> IO TimetableDB
 createTimetable db = do
     printHeader "Create a new Timetable"
@@ -96,7 +96,7 @@ manageTimetableMenu tName db = do
             printError "Invalid choice!"
             manageTimetableMenu tName db
 
--- Display functions
+-- Display subjects with corresponding lessons in a timetable
 displaySubjectsWithLessons :: SubjectMap -> IO ()
 displaySubjectsWithLessons subjects = do
     let border = replicate 30 '='
@@ -109,20 +109,44 @@ displaySubjectsWithLessons subjects = do
             else displayLessons lessons
         putStrLn border
 
+-- Display lessons in a subject
 displayLessons :: Map.Map TimeSlot LessonDetails -> IO ()
 displayLessons lessons = do
     let border = replicate 60 '='
         lessonsList = Map.toList lessons
-    putStrLn ""
-    putStrLn border
-    forM_ (zip [1..] lessonsList) $ \(index, ((day, timeRange), (venue, lecturer))) -> do
-        putStrLn $ "Day: " <> show day
-        putStrLn $ "Time: " <> show timeRange
-        putStrLn $ "Venue: " <> venue
-        putStrLn $ "Lecturer: " <> lecturer
-        when (index < length lessonsList) $ putStrLn $ replicate 60 '-'
-    putStrLn border
-    putStrLn ""
+        lessonGroups = groupsOf 3 lessonsList
+        
+    forM_ lessonGroups $ \group -> do
+        -- Print top border for all lessons
+        putStrLn $ concat (replicate (length group) border)
+        
+        -- Print day row
+        forM_ group $ \lesson@((day, _), _) -> do
+            putStr $ padRight 60 ("Day: " <> show day)
+            unless (lesson == last group) $ putStr "| "
+        putStrLn ""
+        
+        -- Print time row
+        forM_ group $ \lesson@((_, timeRange), _) -> do
+            putStr $ padRight 60 ("Time: " <> show timeRange)
+            unless (lesson == last group) $ putStr "| "
+        putStrLn ""
+        
+        -- Print venue row
+        forM_ group $ \lesson@(_, (venue, _)) -> do
+            putStr $ padRight 60 ("Venue: " <> venue)
+            unless (lesson == last group) $ putStr "| "
+        putStrLn ""
+        
+        -- Print lecturer row
+        forM_ group $ \lesson@(_, (_, lecturer)) -> do
+            putStr $ padRight 60 ("Lecturer: " <> lecturer)
+            unless (lesson == last group) $ putStr "| "
+        putStrLn ""
+        
+        -- Print bottom border
+        putStrLn $ concat (replicate (length group) border)
+        putStrLn ""
 
 -- Display a menu for user to select a timetable to edit
 editTimetableMenu :: TimetableDB -> IO TimetableDB
@@ -202,7 +226,7 @@ manageSubjectMenu tName sName db = do
             newDb <- handleLessonOperation deleteLesson tName sName "Delete" db
             manageSubjectMenu tName sName newDb
             
-        ""  -> manageTimetableMenu tName db
+        ""  -> return db
         
         _ -> do
             printError "Invalid choice!"
