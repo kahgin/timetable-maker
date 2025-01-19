@@ -440,7 +440,7 @@ editLesson tName sName oldTimeSlot db = do
 -- Check for time conflicts across all subjects
 findTimeConflict :: TimeSlot -> SubjectMap -> Maybe (String, TimeSlot)
 findTimeConflict (day, timeRange) subjects =
-    let conflicts = [(sName, (d, tr)) | (sName, lessons) <- Map.toList subjects, (timeSlot@(d, tr), _) <- Map.toList lessons, d == day && isOverlap timeRange tr]
+    let conflicts = [(sName, (d, tr)) | (sName, lessons) <- Map.toList subjects, ((d, tr), _) <- Map.toList lessons, d == day && isOverlap timeRange tr]
     in case conflicts of
         [] -> Nothing
         (conflict:_) -> Just conflict
@@ -493,7 +493,7 @@ lessonMenu tName sName db = do
         Nothing -> do
             printError "Subject not found."
             return Nothing
-        Just lessons -> do
+        Just _ -> do
             displaySubjectLessons tName sName db
             day <- validateDay
             timeRange <- validateTime

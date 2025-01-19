@@ -6,11 +6,12 @@ import Utility
 import qualified Data.Map as Map
 import Data.Time
 import Control.Monad (forM_)
-import Data.Char (toUpper)
 
+-- Constant for column width
 columnWidth :: Int
 columnWidth = 15
 
+-- Menu for selecting a timetable to view
 viewTimetableMenu :: TimetableDB -> IO ()
 viewTimetableMenu db =
     if Map.null db
@@ -22,24 +23,7 @@ viewTimetableMenu db =
                     Nothing -> printError "Timetable not found."
                     Just subjects -> printTimetable name subjects
 
-displayLessons :: LessonMap -> IO ()
-displayLessons lessons =
-    let formatLesson (timeSlot, (venue, lecturer)) =
-            let (day, timeRange) = timeSlot
-            in [ "Day: " <> show day
-               , "Time: " <> show timeRange
-               , "Venue: " <> venue
-               , "Lecturer: " <> lecturer
-               ]
-        border = replicate 60 '='
-    in putStrLn "" >>
-       putStrLn border >>
-       forM_ (Map.toList lessons) (\lesson -> 
-           mapM_ putStrLn (formatLesson lesson) >>
-           putStrLn (replicate 60 '-')) >>
-       putStrLn border >>
-       putStrLn ""
-
+-- Print timetable
 printTimetable :: String -> SubjectMap -> IO ()
 printTimetable name subjects = 
     clearScreen >>
@@ -57,6 +41,7 @@ printTimetable name subjects =
            printDayRow timeSlots day (getLessonsForDay day subjects)) >>
        putStrLn line
 
+-- Get lessons for a given day
 getLessonsForDay :: DayOfWeek -> SubjectMap -> [(String, TimeSlot, LessonDetails)]
 getLessonsForDay day subjects =
     [ (sName, timeSlot, details)
@@ -65,6 +50,7 @@ getLessonsForDay day subjects =
     , d == day
     ]
 
+-- Generate time slots from start to end time
 generateTimeSlots :: TimeOfDay -> TimeOfDay -> [String]
 generateTimeSlots start end =
     let formattedEnd = formatTime defaultTimeLocale "%R" end
@@ -73,14 +59,7 @@ generateTimeSlots start end =
        iterate addHours start
     where addHours time = time { todHour = (todHour time + 1) `mod` 24 }
 
-formatTimeOfDay :: TimeOfDay -> String
-formatTimeOfDay time =
-    let formatted = formatTime defaultTimeLocale "%I:%M%p" time
-        withLeadingZero = if head formatted == '1' || head formatted == '2'
-                         then formatted
-                         else '0' : tail formatted
-    in map toUpper withLeadingZero
-
+-- Print a row for a day
 printDayRow :: [String] -> DayOfWeek -> [(String, TimeSlot, LessonDetails)] -> IO ()
 printDayRow timeSlots day lessons = do
     let subjectLines = map (formatTimeSlotContent lessons) timeSlots
@@ -97,6 +76,7 @@ printDayRow timeSlots day lessons = do
                                              else "") <> "|"
         putStrLn ""
 
+-- Format the content of a time slot
 formatTimeSlotContent :: [(String, TimeSlot, LessonDetails)] -> String -> [String]
 formatTimeSlotContent lessons slot =
     case findLessonInTimeSlot slot lessons of
@@ -104,6 +84,7 @@ formatTimeSlotContent lessons slot =
         Just (subject, _, (venue, lecturer)) ->
             filter (not . null) [subject, venue, lecturer]
 
+-- Find a lesson in a given time slot
 findLessonInTimeSlot :: String -> [(String, TimeSlot, LessonDetails)] -> Maybe (String, TimeSlot, LessonDetails)
 findLessonInTimeSlot timeStr lessons =
     let containsTime (_, (_, TimeRange start end), _) =

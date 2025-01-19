@@ -100,7 +100,7 @@ timeToMinutes t = todHour t * 60 + todMin t
 selectItem :: String -> [String]-> IO (Maybe Int)
 selectItem header items =
     printHeader header >>
-    mapM_ (\(i, item) -> putStrLn $ show i <> ". " <> item) (zip [1..] items) >>
+    mapM_ (\(i, item) -> putStrLn $ show (i::Int) <> ". " <> item) (zip [1..] items) >>
     printExit >>
     getInput "Select option: " >>= \choice ->
     case choice of

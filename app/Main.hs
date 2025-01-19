@@ -4,13 +4,24 @@ import UI
 import Utility
 import Timetable
 import View
+import Scraper
 import qualified Data.Map as Map
+
+--main :: IO ()
+--main = do
+    -- clearScreen
+    --db <- loadTimetableDB
+    --mainMenu db
 
 main :: IO ()
 main = do
     clearScreen
     db <- loadTimetableDB
-    mainMenu db
+    newDb <- importTimetableFromHTML "C:/Users/kahgin/Downloads/Sem5 timetable.html"
+    -- Merge with existing database if needed
+    let mergedDb = Map.union newDb db
+    --saveTimetableDB mergedDb
+    mainMenu mergedDb
 
 mainMenu :: TimetableDB -> IO ()
 mainMenu db = do
@@ -21,7 +32,7 @@ mainMenu db = do
     putStrLn "4. View a timetable"
     printExit
     
-    choice <- getInput "Select option (1-5): "
+    choice <- getInput "Select option (1-4): "
     case choice of
         "1" -> do
             newDb <- createTimetable db

@@ -65,6 +65,7 @@ executable a-kahgin
                     , Utility
                     , Timetable
 					, View
+					, Scraper
 
     -- LANGUAGE extensions used by modules in this package.
     -- other-extensions:
@@ -78,6 +79,7 @@ executable a-kahgin
                     , aeson >= 2.2 && < 2.3
                     , bytestring
                     , directory
+					, scalpel >= 0.6 && < 0.7
 
     -- Directories containing source files.
     hs-source-dirs:   app
