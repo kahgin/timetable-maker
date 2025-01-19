@@ -4,24 +4,13 @@ import UI
 import Utility
 import Timetable
 import View
-import Scraper
 import qualified Data.Map as Map
-
---main :: IO ()
---main = do
-    -- clearScreen
-    --db <- loadTimetableDB
-    --mainMenu db
 
 main :: IO ()
 main = do
     clearScreen
     db <- loadTimetableDB
-    newDb <- importTimetableFromHTML "C:/Users/kahgin/Downloads/Sem5 timetable.html"
-    -- Merge with existing database if needed
-    let mergedDb = Map.union newDb db
-    --saveTimetableDB mergedDb
-    mainMenu mergedDb
+    mainMenu db
 
 mainMenu :: TimetableDB -> IO ()
 mainMenu db = do

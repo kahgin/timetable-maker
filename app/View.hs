@@ -5,7 +5,7 @@ import UI
 import Utility
 import qualified Data.Map as Map
 import Data.Time
-import Control.Monad (forM_)
+import Control.Monad (forM_, when)
 
 -- Constant for column width
 columnWidth :: Int
@@ -37,8 +37,9 @@ printTimetable name subjects =
     in putStrLn line >>
        putStrLn header >>
        putStrLn line >>
-       forM_ days (\day -> 
-           printDayRow timeSlots day (getLessonsForDay day subjects)) >>
+       forM_ (zip [1..] days) (\(idx,day) -> do
+           printDayRow timeSlots day (getLessonsForDay day subjects)
+           when (idx /= length days) $ putStrLn (replicate width '-')) >>
        putStrLn line
 
 -- Get lessons for a given day
