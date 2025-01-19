@@ -28,6 +28,6 @@ When adding or editing a lesson, you will need to provide day, start time and en
 
 Select ```View a timetable``` from the main menu to see a formatted display of your schedule. The timetable view shows lessons arranged by day and time, with the subject name, venue and lecturer name.
 
-![Display timetable](./assets/Display%20timetable.png)
+![View timetable](./assets/View%20timetable.png)
 
 Enjoy managing your timetable with this simple application!
